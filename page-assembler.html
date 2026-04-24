@@ -1,0 +1,3614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page Assembler</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { overflow: hidden; }
+    .code-block {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 11.5px;
+      line-height: 1.65;
+      white-space: pre;
+      overflow-x: auto;
+      padding: 14px 16px;
+      background: #0d1117;
+      color: #e2e8f0;
+      border-radius: 8px;
+      margin: 0;
+    }
+    .code-tab { transition: color 0.1s, border-color 0.1s; }
+    #code-drawer { transition: height 0.2s ease; }
+    #add-menu .blade-btn {
+      display: block; width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      font-size: 12px; font-weight: 500;
+      color: #d1d5db;
+      background: none; border: none;
+      border-radius: 6px; cursor: pointer;
+      transition: background 0.1s, color 0.1s;
+      white-space: nowrap;
+    }
+    #add-menu .blade-btn:hover { background: #374151; color: #fff; }
+    .stack-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      background: #111827;
+      margin-bottom: 4px;
+      user-select: none;
+      transition: border-color 0.15s, opacity 0.15s;
+    }
+    .stack-item.drag-over  { border-top: 2px solid #6366f1; }
+    .stack-item.dragging   { opacity: 0.4; }
+    .drag-handle { color: #4b5563; font-size: 14px; cursor: grab; flex-shrink: 0; line-height: 1; padding: 2px; }
+    .drag-handle:active { cursor: grabbing; }
+    .cat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+    .cat-dot-hero    { background: #818cf8; }
+    .cat-dot-content { background: #38bdf8; }
+    .cat-dot-social  { background: #34d399; }
+    .item-label { flex: 1; font-size: 12px; font-weight: 500; color: #d1d5db; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .remove-btn { flex-shrink: 0; background: none; border: none; color: #4b5563; font-size: 13px; cursor: pointer; padding: 2px 5px; border-radius: 4px; line-height: 1; transition: color 0.1s, background 0.1s; }
+    .remove-btn:hover { color: #f87171; background: rgba(248,113,113,0.1); }
+  </style>
+</head>
+<body class="bg-gray-950 text-white h-screen flex flex-col">
+
+  <!-- ── Header ── -->
+  <header class="shrink-0 bg-gray-900 border-b border-gray-800 flex items-center gap-3 px-4 py-2">
+    <span class="font-bold text-white tracking-tight text-sm">🧩 Page Assembler</span>
+    <div class="w-px h-4 bg-gray-700"></div>
+    <span class="text-xs text-gray-500">Add blades · drag to reorder · live preview</span>
+    <div class="ml-auto flex items-center gap-3">
+      <button onclick="exportHTML()" id="export-btn" class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors">Export HTML</button>
+      <div class="w-px h-4 bg-gray-700"></div>
+      <a href="blade-builder.html" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Blade Builder</a>
+    </div>
+  </header>
+
+  <!-- ── Main ── -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- Left sidebar -->
+    <div style="width:256px;min-width:256px" class="flex flex-col overflow-hidden border-r border-gray-800 bg-gray-900">
+
+      <!-- Sidebar scroll container -->
+      <div class="flex-1 flex flex-col overflow-y-auto min-h-0">
+
+        <!-- Add blade button -->
+        <div class="p-3 border-b border-gray-800 shrink-0">
+          <button id="add-btn" onclick="toggleAddMenu()" class="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-colors">
+            <span>+ Add Blade</span>
+            <svg id="add-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" style="transition:transform 0.15s"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+
+        <!-- Inline blade picker (expands in flow) -->
+        <div id="add-menu" style="display:none" class="border-b border-gray-800 bg-gray-950 shrink-0">
+          <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b7280;padding:10px 14px 4px">Hero &amp; Layout</div>
+          <div class="px-2 pb-1">
+            <button class="blade-btn" onclick="addBlade('promo')">Promo Blade</button>
+            <button class="blade-btn" onclick="addBlade('aurora')">Aurora Hero</button>
+            <button class="blade-btn" onclick="addBlade('glass')">Glass Hero</button>
+            <button class="blade-btn" onclick="addBlade('split')">Split Screen</button>
+            <button class="blade-btn" onclick="addBlade('parallax')">Parallax</button>
+            <button class="blade-btn" onclick="addBlade('minimal')">Minimal Hero</button>
+            <button class="blade-btn" onclick="addBlade('videohero')">Video Hero</button>
+            <button class="blade-btn" onclick="addBlade('stickyscroll')">Sticky Scroll</button>
+            <button class="blade-btn" onclick="addBlade('zigzag')">Zigzag</button>
+          </div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b7280;padding:8px 14px 4px;border-top:1px solid #1f2937">Content</div>
+          <div class="px-2 pb-1">
+            <button class="blade-btn" onclick="addBlade('cards')">Card Grid</button>
+            <button class="blade-btn" onclick="addBlade('bento')">Bento Grid</button>
+            <button class="blade-btn" onclick="addBlade('tabs')">Feature Tabs</button>
+            <button class="blade-btn" onclick="addBlade('reveal')">Scroll Reveal</button>
+            <button class="blade-btn" onclick="addBlade('timeline')">Timeline</button>
+          </div>
+          <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b7280;padding:8px 14px 4px;border-top:1px solid #1f2937">Social &amp; Convert</div>
+          <div class="px-2 pb-2">
+            <button class="blade-btn" onclick="addBlade('stats')">Stats</button>
+            <button class="blade-btn" onclick="addBlade('testi')">Testimonials</button>
+            <button class="blade-btn" onclick="addBlade('logowall')">Logo Wall</button>
+            <button class="blade-btn" onclick="addBlade('ctabanner')">CTA Banner</button>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="stack-empty" class="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center" style="min-height:120px">
+          <span style="font-size:32px;opacity:0.25">🧩</span>
+          <p class="text-xs text-gray-600 leading-relaxed">No blades yet.<br>Click <strong class="text-gray-500">+ Add Blade</strong> to start.</p>
+        </div>
+
+        <!-- Stack list -->
+        <div id="stack-list" class="p-2" style="display:none"
+          ondragover="event.preventDefault()"
+          ondrop="onDropTrail(event)">
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="shrink-0 p-3 border-t border-gray-800 flex items-center justify-between">
+        <span id="blade-count" class="text-xs text-gray-600">0 blades</span>
+        <button onclick="clearAll()" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-red-900 text-gray-400 hover:text-red-300 transition-colors">Clear all</button>
+      </div>
+    </div>
+
+    <!-- Right: preview + code drawer -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Preview bar -->
+      <div class="shrink-0 flex items-center justify-between px-3 py-1.5 bg-gray-900 border-b border-gray-800">
+        <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Preview</span>
+        <div class="flex items-center gap-2">
+          <span id="preview-label" class="text-xs text-gray-600"></span>
+          <button onclick="toggleCodeDrawer()" id="code-drawer-btn" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">{ } Code</button>
+          <button onclick="refreshPreview()" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">Refresh</button>
+        </div>
+      </div>
+
+      <!-- Preview iframe -->
+      <iframe id="preview" class="flex-1 w-full border-0 bg-white min-h-0"></iframe>
+
+      <!-- Code drawer -->
+      <div id="code-drawer" class="shrink-0 flex flex-col border-t border-gray-800 bg-gray-950" style="height:0;overflow:hidden">
+
+        <!-- Drawer header: tab bar + copy button -->
+        <div class="shrink-0 flex items-center gap-0 px-3 border-b border-gray-800 bg-gray-900">
+          <button onclick="setCodeTab('html')" data-tab="html" class="code-tab text-xs font-bold px-3 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-300 uppercase tracking-widest">HTML</button>
+          <button onclick="setCodeTab('css')"  data-tab="css"  class="code-tab text-xs font-bold px-3 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-300 uppercase tracking-widest">CSS</button>
+          <button onclick="setCodeTab('js')"   data-tab="js"   class="code-tab text-xs font-bold px-3 py-2 border-b-2 border-transparent text-gray-500 hover:text-gray-300 uppercase tracking-widest">JS</button>
+          <div class="flex-1"></div>
+          <button onclick="copyActiveTab()" id="copy-code-btn" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors mr-2">Copy all</button>
+          <button onclick="toggleCodeDrawer()" class="text-gray-600 hover:text-gray-400 text-sm px-1 transition-colors" title="Close">✕</button>
+        </div>
+
+        <!-- Per-blade code panels -->
+        <div id="code-content" class="flex-1 overflow-y-auto p-3 flex flex-col gap-3"></div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const templates = {
+      // ── CARD GRID ──────────────────────────────────────────────────────────────
+      cards: {
+        html: `<section class="cards-section">
+  <div class="section-header">
+    <p class="eyebrow">What Agentforce Can Do</p>
+    <h2 class="section-title">AI Built for Every Team</h2>
+    <p class="section-sub">Autonomous agents that work alongside your people — across every department.</p>
+  </div>
+  <div class="cards-grid">
+
+    <article class="card" data-card="sales">
+      <div class="card-icon">🤖</div>
+      <h3 class="card-title">Sales</h3>
+      <p class="card-body">Research accounts, draft outreach, and surface the right insights — automatically, at scale.</p>
+      <a href="#" class="card-link">Explore Sales Agents →</a>
+    </article>
+
+    <article class="card" data-card="service">
+      <div class="card-icon">💬</div>
+      <h3 class="card-title">Service</h3>
+      <p class="card-body">Resolve cases faster with agents that handle routine requests and escalate when it matters.</p>
+      <a href="#" class="card-link">Explore Service Agents →</a>
+    </article>
+
+    <article class="card" data-card="marketing">
+      <div class="card-icon">📊</div>
+      <h3 class="card-title">Marketing</h3>
+      <p class="card-body">Launch personalized campaigns at scale — from segment to send — with AI that knows your audience.</p>
+      <a href="#" class="card-link">Explore Marketing Agents →</a>
+    </article>
+
+  </div>
+</section>`,
+        css: `.cards-section {
+  background: #f3f3f3;
+  padding: 72px 32px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.cards-section .section-header{
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto 52px;
+}
+
+.cards-section .eyebrow{
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #00A1E0;
+  margin: 0 0 12px;
+}
+
+.cards-section .section-title{
+  font-size: 40px;
+  font-weight: 800;
+  color: #032D60;
+  margin: 0 0 16px;
+  line-height: 1.15;
+}
+
+.cards-section .section-sub{
+  font-size: 17px;
+  color: #555;
+  margin: 0;
+  line-height: 1.65;
+}
+
+.cards-section .cards-grid{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.cards-section .card{
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 36px 28px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cards-section .card:hover{
+  transform: translateY(-5px);
+  box-shadow: 0 10px 32px rgba(0,0,0,0.13);
+}
+
+.cards-section .card-icon{ font-size: 36px; margin-bottom: 20px; }
+
+.cards-section .card-title{
+  font-size: 22px;
+  font-weight: 700;
+  color: #032D60;
+  margin: 0 0 12px;
+}
+
+.cards-section .card-body{
+  font-size: 15px;
+  color: #555;
+  line-height: 1.7;
+  margin: 0 0 24px;
+}
+
+.cards-section .card-link{
+  font-size: 14px;
+  font-weight: 600;
+  color: #0070D2;
+  text-decoration: none;
+}
+
+.cards-section .card-link:hover{ text-decoration: underline; }
+
+@media (max-width: 768px) {
+  .cards-section .cards-grid{ grid-template-columns: 1fr; }
+  .cards-section .section-title{ font-size: 30px; }
+}`,
+        js: `document.querySelectorAll('.card').forEach(function(card) {
+  card.addEventListener('click', function() {
+    console.log('Card clicked:', this.getAttribute('data-card'));
+  });
+});`
+      },
+
+      // ── PROMO BLADE ────────────────────────────────────────────────────────────
+      promo: {
+        html: `<section class="promo-blade">
+  <div class="promo-glow"></div>
+  <div class="promo-content">
+    <span class="promo-eyebrow">Introducing Agentforce 2.0</span>
+    <h1 class="promo-headline">AI That Works<br>While You Sleep</h1>
+    <p class="promo-body">
+      Deploy autonomous AI agents across sales, service, and marketing.
+      No code required. Built on the world's #1 CRM.
+    </p>
+    <div class="promo-ctas">
+      <a href="#" class="btn-primary">Get Started Free</a>
+      <a href="#" class="btn-ghost">▶&nbsp; Watch Demo</a>
+    </div>
+  </div>
+</section>`,
+        css: `.promo-blade {
+  position: relative;
+  min-height: 540px;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(130deg, #032D60 0%, #0070D2 100%);
+  overflow: hidden;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.promo-blade .promo-glow{
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 78% 50%, rgba(0,161,224,0.28) 0%, transparent 62%);
+  pointer-events: none;
+}
+
+.promo-blade .promo-content{
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+  padding: 80px 64px;
+}
+
+.promo-blade .promo-eyebrow{
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #00A1E0;
+  margin-bottom: 20px;
+}
+
+.promo-blade .promo-headline{
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1.08;
+  color: #ffffff;
+  margin: 0 0 22px;
+}
+
+.promo-blade .promo-body{
+  font-size: 18px;
+  color: rgba(255,255,255,0.82);
+  line-height: 1.75;
+  margin: 0 0 40px;
+}
+
+.promo-blade .promo-ctas{
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.promo-blade .btn-primary{
+  display: inline-block;
+  padding: 14px 32px;
+  background: #00A1E0;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.promo-blade .btn-primary:hover{ background: #0090c8; }
+
+.promo-blade .btn-ghost{
+  display: inline-block;
+  padding: 14px 24px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-radius: 4px;
+  transition: border-color 0.15s ease;
+}
+
+.promo-blade .btn-ghost:hover{ border-color: #ffffff; }
+
+@media (max-width: 768px) {
+  .promo-blade .promo-content{ padding: 52px 24px; }
+  .promo-blade .promo-headline{ font-size: 38px; }
+}`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    console.log('CTA clicked:', this.getAttribute('data-cta'));
+  });
+});`
+      },
+
+      // ── PARALLAX ───────────────────────────────────────────────────────────────
+      parallax: {
+        html: `<section class="parallax-blade">
+
+  <div class="parallax-bg" data-parallax-layer="back" data-speed="0.25"></div>
+
+  <div class="parallax-mid" data-parallax-layer="mid" data-speed="0.5">
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+    <div class="glow glow-3"></div>
+  </div>
+
+  <div class="parallax-overlay"></div>
+
+  <div class="parallax-content" data-parallax-layer="front" data-speed="0.08">
+    <span class="px-eyebrow">The Future of Work</span>
+    <h2 class="px-headline">Meet Your AI<br>Workforce</h2>
+    <p class="px-body">
+      Agentforce deploys intelligent agents that act, decide,
+      and deliver — so your team can focus on what matters most.
+    </p>
+    <div class="px-ctas">
+      <a href="#" class="btn-primary">Learn More</a>
+      <a href="#" class="btn-ghost">Request a Demo</a>
+    </div>
+  </div>
+
+</section>`,
+        css: `.parallax-blade {
+  position: relative;
+  min-height: 620px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+/* Replace URL with your Salesforce asset URL */
+.parallax-blade .parallax-bg{
+  position: absolute;
+  inset: -20% 0;
+  background-image: url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1600&q=80');
+  background-size: cover;
+  background-position: center;
+  will-change: transform;
+  z-index: 0;
+}
+
+.parallax-blade .parallax-mid{
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.parallax-blade .glow{
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  opacity: 0.55;
+}
+
+.parallax-blade .glow-1{ width: 480px; height: 480px; background: rgba(0,112,210,0.6); top: -80px; left: -80px; }
+.parallax-blade .glow-2{ width: 360px; height: 360px; background: rgba(0,161,224,0.5); bottom: -60px; right: 10%; }
+.parallax-blade .glow-3{ width: 260px; height: 260px; background: rgba(80,40,180,0.4); top: 30%; right: 28%; }
+
+.parallax-blade .parallax-overlay{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(3,45,96,0.82) 0%, rgba(3,45,96,0.55) 60%, rgba(0,112,210,0.25) 100%);
+  z-index: 2;
+}
+
+.parallax-blade .parallax-content{
+  position: relative;
+  z-index: 3;
+  max-width: 680px;
+  padding: 100px 64px;
+  will-change: transform;
+}
+
+.parallax-blade .px-eyebrow{
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #00A1E0;
+  margin-bottom: 18px;
+}
+
+.parallax-blade .px-headline{
+  font-size: 60px;
+  font-weight: 800;
+  line-height: 1.06;
+  color: #ffffff;
+  margin: 0 0 24px;
+  text-shadow: 0 2px 24px rgba(0,0,0,0.35);
+}
+
+.parallax-blade .px-body{
+  font-size: 18px;
+  color: rgba(255,255,255,0.85);
+  line-height: 1.75;
+  margin: 0 0 40px;
+  max-width: 520px;
+}
+
+.parallax-blade .px-ctas{
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.parallax-blade .btn-primary{
+  display: inline-block;
+  padding: 14px 32px;
+  background: #00A1E0;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.parallax-blade .btn-primary:hover{ background: #0090c8; transform: translateY(-2px); }
+
+.parallax-blade .btn-ghost{
+  display: inline-block;
+  padding: 14px 24px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-radius: 4px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.parallax-blade .btn-ghost:hover{ border-color: #ffffff; transform: translateY(-2px); }
+
+@media (max-width: 768px) {
+  .parallax-blade .parallax-content{ padding: 64px 24px; }
+  .parallax-blade .px-headline{ font-size: 40px; }
+}`,
+        js: `(function () {
+  var blade  = document.querySelector('.parallax-blade');
+  if (!blade) return;
+  var layers = blade.querySelectorAll('[data-parallax-layer]');
+
+  function onScroll() {
+    var rect     = blade.getBoundingClientRect();
+    var scrolled = -rect.top;
+    layers.forEach(function(layer) {
+      var speed  = parseFloat(layer.getAttribute('data-speed') || 0);
+      layer.style.transform = 'translateY(' + (scrolled * speed) + 'px)';
+    });
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  blade.querySelectorAll('[data-cta]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      console.log('CTA clicked:', this.getAttribute('data-cta'));
+    });
+  });
+})();`
+      },
+
+      // ── BENTO GRID ─────────────────────────────────────────────────────────────
+      bento: {
+        html: `<section class="bento-section">
+  <div class="bento-header">
+    <span class="bento-eyebrow">Platform Overview</span>
+    <h2 class="bento-title">Everything you need.<br>Nothing you don't.</h2>
+  </div>
+  <div class="bento-grid">
+
+    <div class="bento-card bento-wide bento-dark" data-card="hero">
+      <div class="bento-badge">New</div>
+      <h3 class="bento-card-title">Autonomous AI Agents</h3>
+      <p class="bento-card-body">Deploy agents that research, decide, and act — without waiting for human input on every step.</p>
+      <div class="bento-orb"></div>
+    </div>
+
+    <div class="bento-card" data-card="speed">
+      <div class="bento-icon">⚡</div>
+      <h3 class="bento-card-title">10× Faster</h3>
+      <p class="bento-card-body">Close deals and resolve cases at AI speed.</p>
+    </div>
+
+    <div class="bento-card bento-accent" data-card="no-code">
+      <div class="bento-icon">🛠</div>
+      <h3 class="bento-card-title">No Code Required</h3>
+      <p class="bento-card-body">Build and deploy agents with clicks, not code.</p>
+    </div>
+
+    <div class="bento-card" data-card="integrations">
+      <div class="bento-icon">🔗</div>
+      <h3 class="bento-card-title">1,000+ Integrations</h3>
+      <p class="bento-card-body">Connect to any system your team already uses.</p>
+    </div>
+
+    <div class="bento-card bento-wide bento-light-accent" data-card="trust">
+      <h3 class="bento-card-title">Built on Einstein Trust Layer</h3>
+      <p class="bento-card-body">Every agent interaction is grounded, auditable, and safe — with zero data leakage to model providers.</p>
+      <div class="bento-trust-icons">
+        <span>🔒 Data Security</span>
+        <span>📋 Audit Logs</span>
+        <span>✅ Compliance Ready</span>
+      </div>
+    </div>
+
+  </div>
+</section>`,
+        css: `.bento-section {
+  background: #f5f5f7;
+  padding: 80px 32px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.bento-section .bento-header{
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.bento-section .bento-eyebrow{
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0070D2;
+  margin-bottom: 14px;
+}
+
+.bento-section .bento-title{
+  font-size: 44px;
+  font-weight: 800;
+  color: #032D60;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.bento-section .bento-grid{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.bento-section .bento-card{
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 36px 32px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.bento-section .bento-card:hover{
+  transform: translateY(-4px);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.1);
+}
+
+.bento-section .bento-wide{ grid-column: span 2; }
+
+.bento-section .bento-dark{ background: #032D60; }
+.bento-section .bento-dark .bento-card-title{ color: #fff; }
+.bento-section .bento-dark .bento-card-body{ color: rgba(255,255,255,0.72); }
+
+.bento-section .bento-accent{ background: linear-gradient(135deg, #0070D2 0%, #00A1E0 100%); }
+.bento-section .bento-accent .bento-card-title{ color: #fff; }
+.bento-section .bento-accent .bento-card-body{ color: rgba(255,255,255,0.82); }
+
+.bento-section .bento-light-accent{ background: linear-gradient(135deg, #e8f4ff 0%, #f0faff 100%); }
+
+.bento-section .bento-badge{
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: #00A1E0;
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+
+.bento-section .bento-icon{ font-size: 32px; margin-bottom: 16px; display: block; }
+
+.bento-section .bento-card-title{
+  font-size: 22px;
+  font-weight: 700;
+  color: #032D60;
+  margin: 0 0 10px;
+}
+
+.bento-section .bento-card-body{
+  font-size: 14px;
+  color: #555;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.bento-section .bento-orb{
+  position: absolute;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,161,224,0.35) 0%, transparent 70%);
+  right: -40px; bottom: -60px;
+  pointer-events: none;
+}
+
+.bento-section .bento-trust-icons{
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.bento-section .bento-trust-icons span{
+  font-size: 13px;
+  font-weight: 600;
+  color: #0070D2;
+  background: rgba(0,112,210,0.08);
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+@media (max-width: 768px) {
+  .bento-section .bento-grid{ grid-template-columns: 1fr; }
+  .bento-section .bento-wide{ grid-column: span 1; }
+  .bento-section .bento-title{ font-size: 30px; }
+}`,
+        js: `document.querySelectorAll('.bento-card').forEach(function(card) {
+  card.addEventListener('click', function() {
+    console.log('Bento card:', this.getAttribute('data-card'));
+  });
+});`
+      },
+
+      // ── GLASS HERO ─────────────────────────────────────────────────────────────
+      glass: {
+        html: `<section class="glass-section">
+  <div class="glass-orb glass-orb-1"></div>
+  <div class="glass-orb glass-orb-2"></div>
+  <div class="glass-orb glass-orb-3"></div>
+  <div class="glass-card">
+    <div class="glass-pill">Agentforce 2.0 — Now Available</div>
+    <h1 class="glass-headline">The AI-Powered<br>Future of CRM</h1>
+    <p class="glass-body">Deploy intelligent agents that work autonomously across every team — grounded in your data, governed by your rules.</p>
+    <div class="glass-actions">
+      <button class="glass-btn-primary">Start for Free</button>
+      <button class="glass-btn-ghost">See it in Action</button>
+    </div>
+    <div class="glass-stats">
+      <div class="glass-stat"><span class="glass-stat-num">17.5T</span><span class="glass-stat-label">AI Actions / Year</span></div>
+      <div class="glass-divider"></div>
+      <div class="glass-stat"><span class="glass-stat-num">150k+</span><span class="glass-stat-label">Customers</span></div>
+      <div class="glass-divider"></div>
+      <div class="glass-stat"><span class="glass-stat-num">#1</span><span class="glass-stat-label">AI CRM Platform</span></div>
+    </div>
+  </div>
+</section>`,
+        css: `.glass-section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #020818 0%, #032D60 50%, #0a0a2e 100%);
+  overflow: hidden;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  padding: 40px 24px;
+}
+
+.glass-section .glass-orb{
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+  animation: orbFloat 8s ease-in-out infinite;
+}
+
+.glass-section .glass-orb-1{ width:500px;height:500px;background:radial-gradient(circle,#0070D2,transparent);top:-100px;left:-100px;animation-delay:0s; }
+.glass-section .glass-orb-2{ width:400px;height:400px;background:radial-gradient(circle,#7B5EA7,transparent);bottom:-80px;right:-80px;animation-delay:-3s; }
+.glass-section .glass-orb-3{ width:300px;height:300px;background:radial-gradient(circle,#00A1E0,transparent);top:40%;left:55%;animation-delay:-5s; }
+
+@keyframes orbFloat{
+  0%,100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-30px) scale(1.05); }
+}
+
+.glass-section .glass-card{
+  position: relative;
+  z-index: 2;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 28px;
+  padding: 60px 56px;
+  max-width: 700px;
+  width: 100%;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.glass-section .glass-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #00A1E0;
+  background: rgba(0,161,224,0.12);
+  border: 1px solid rgba(0,161,224,0.3);
+  border-radius: 20px;
+  padding: 5px 14px;
+  margin-bottom: 24px;
+}
+
+.glass-section .glass-pill::before{
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #00A1E0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse{
+  0%,100% { opacity:1;transform:scale(1); }
+  50%      { opacity:0.4;transform:scale(0.8); }
+}
+
+.glass-section .glass-headline{
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.08;
+  color: #fff;
+  margin: 0 0 20px;
+  letter-spacing: -0.02em;
+}
+
+.glass-section .glass-body{
+  font-size: 17px;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.75;
+  margin: 0 0 36px;
+}
+
+.glass-section .glass-actions{ display:flex;gap:14px;flex-wrap:wrap;margin-bottom:44px; }
+
+.glass-section .glass-btn-primary{
+  padding: 14px 30px;
+  background: #00A1E0;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.glass-section .glass-btn-primary:hover{ background:#0090c8;transform:translateY(-2px); }
+
+.glass-section .glass-btn-ghost{
+  padding: 14px 24px;
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.glass-section .glass-btn-ghost:hover{ background:rgba(255,255,255,0.14);transform:translateY(-2px); }
+
+.glass-section .glass-stats{
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.glass-section .glass-stat{ display:flex;flex-direction:column;gap:4px; }
+
+.glass-section .glass-stat-num{
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+}
+
+.glass-section .glass-stat-label{
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.glass-section .glass-divider{ width:1px;height:40px;background:rgba(255,255,255,0.15);flex-shrink:0; }
+
+@media (max-width: 600px) {
+  .glass-section .glass-card{ padding:40px 28px; }
+  .glass-section .glass-headline{ font-size:36px; }
+  .glass-section .glass-stats{ flex-direction:column;align-items:flex-start; }
+  .glass-section .glass-divider{ display:none; }
+}`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    console.log('CTA:', this.getAttribute('data-cta'));
+  });
+});`
+      },
+
+      // ── ANIMATED STATS ─────────────────────────────────────────────────────────
+      stats: {
+        html: `<section class="stats-section">
+  <div class="stats-inner">
+    <div class="stats-header">
+      <span class="stats-eyebrow">By the Numbers</span>
+      <h2 class="stats-title">Agentforce at Scale</h2>
+      <p class="stats-sub">Trusted by the world's leading companies to power autonomous AI.</p>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card" data-target="17.5" data-suffix="T"  data-label="AI Actions per Year"><span class="stat-number">17.5T</span><span class="stat-label">AI Actions per Year</span></div>
+      <div class="stat-card" data-target="150"  data-suffix="k+" data-label="Customers Worldwide"><span class="stat-number">150k+</span><span class="stat-label">Customers Worldwide</span></div>
+      <div class="stat-card" data-target="98"   data-suffix="%"  data-label="Customer Satisfaction"><span class="stat-number">98%</span><span class="stat-label">Customer Satisfaction</span></div>
+      <div class="stat-card" data-target="3"    data-suffix="×"  data-label="Faster Case Resolution"><span class="stat-number">3×</span><span class="stat-label">Faster Case Resolution</span></div>
+    </div>
+    <div class="stats-logos">
+      <span class="stats-logo-label">Trusted by</span>
+      <div class="stats-logo-row">
+        <span class="logo-chip">Amazon</span>
+        <span class="logo-chip">Marriott</span>
+        <span class="logo-chip">IBM</span>
+        <span class="logo-chip">Adidas</span>
+        <span class="logo-chip">Toyota</span>
+      </div>
+    </div>
+  </div>
+</section>`,
+        css: `.stats-section {
+  background: #001639;
+  padding: 88px 32px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  overflow: hidden;
+  position: relative;
+}
+
+.stats-section::before {
+  content: '';
+  position: absolute;
+  width: 700px; height: 700px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,161,224,0.12) 0%, transparent 65%);
+  top: 50%; right: -200px; transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.stats-section .stats-inner{ max-width:1100px;margin:0 auto; }
+
+.stats-section .stats-header{ text-align:center;margin-bottom:60px; }
+
+.stats-section .stats-eyebrow{
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #00A1E0;
+  margin-bottom: 14px;
+}
+
+.stats-section .stats-title{ font-size:42px;font-weight:800;color:#fff;margin:0 0 14px; }
+.stats-section .stats-sub{ font-size:16px;color:rgba(255,255,255,0.65);margin:0;line-height:1.7; }
+
+.stats-section .stats-grid{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 64px;
+}
+
+.stats-section .stat-card{
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 36px 24px;
+  text-align: center;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.stats-section .stat-card:hover{ background:rgba(255,255,255,0.09);transform:translateY(-4px); }
+
+.stats-section .stat-number{
+  display: block;
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #fff 40%, #00A1E0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stats-section .stat-label{
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.stats-section .stats-logos{ text-align:center; }
+
+.stats-section .stats-logo-label{
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 20px;
+}
+
+.stats-section .stats-logo-row{ display:flex;justify-content:center;gap:16px;flex-wrap:wrap; }
+
+.stats-section .logo-chip{
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 8px 20px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 768px) {
+  .stats-section .stats-grid{ grid-template-columns:repeat(2,1fr); }
+  .stats-section .stats-title{ font-size:30px; }
+}`,
+        js: `(function () {
+  function animateCount(card, target, suffix, duration) {
+    var isDecimal = target % 1 !== 0;
+    var el = card.querySelector('.stat-number');
+    if (!el) return;
+    var startTime = null;
+    function step(ts) {
+      if (!startTime) startTime = ts;
+      var progress = Math.min((ts - startTime) / duration, 1);
+      var ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = (isDecimal ? (target * ease).toFixed(1) : Math.round(target * ease)) + suffix;
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    el.textContent = '0' + suffix;
+    requestAnimationFrame(step);
+  }
+
+  var observed = new Set();
+  var cards = document.querySelectorAll('.stat-card');
+
+  function trigger(card) {
+    if (observed.has(card)) return;
+    observed.add(card);
+    animateCount(card, parseFloat(card.getAttribute('data-target')), card.getAttribute('data-suffix') || '', 1600);
+  }
+
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) { if (entry.isIntersecting) trigger(entry.target); });
+    }, { threshold: 0.3 });
+    cards.forEach(function(c) { observer.observe(c); });
+  } else {
+    cards.forEach(trigger);
+  }
+})();`
+      },
+
+      // ── TESTIMONIALS MARQUEE ────────────────────────────────────────────────────
+      testi: {
+        html: `<section class="testi-section">
+  <div class="testi-header">
+    <span class="testi-eyebrow">Customer Stories</span>
+    <h2 class="testi-title">Real teams. Real results.</h2>
+  </div>
+
+  <div class="testi-track-wrap">
+    <div class="testi-track testi-track-left">
+      <div class="testi-card"><p class="testi-quote">Agentforce cut our case resolution time in half. Our team now focuses on complex issues — agents handle everything routine.</p><div class="testi-author"><div class="testi-avatar" style="background:#0070D2">JS</div><div><strong>Jamie S.</strong><span>VP Service, Marriott</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">We deployed a sales agent in two days with zero code. Pipeline coverage improved 38% in the first month.</p><div class="testi-author"><div class="testi-avatar" style="background:#7B5EA7">MR</div><div><strong>Maria R.</strong><span>Director of Sales, Adidas</span></div></div></div>
+      <div class="testi-card testi-card-dark"><p class="testi-quote">The Einstein Trust Layer was the deciding factor. We needed AI we could trust with customer data — Salesforce delivered.</p><div class="testi-author"><div class="testi-avatar" style="background:#00A1E0">DK</div><div><strong>David K.</strong><span>CTO, IBM Global Services</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">Marketing campaigns that used to take two weeks now launch in hours. Our agents personalize at a scale we couldn't imagine before.</p><div class="testi-author"><div class="testi-avatar" style="background:#F4820B">AL</div><div><strong>Aisha L.</strong><span>CMO, Toyota NA</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">Agentforce cut our case resolution time in half. Our team now focuses on complex issues — agents handle everything routine.</p><div class="testi-author"><div class="testi-avatar" style="background:#0070D2">JS</div><div><strong>Jamie S.</strong><span>VP Service, Marriott</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">We deployed a sales agent in two days with zero code. Pipeline coverage improved 38% in the first month.</p><div class="testi-author"><div class="testi-avatar" style="background:#7B5EA7">MR</div><div><strong>Maria R.</strong><span>Director of Sales, Adidas</span></div></div></div>
+      <div class="testi-card testi-card-dark"><p class="testi-quote">The Einstein Trust Layer was the deciding factor. We needed AI we could trust with customer data — Salesforce delivered.</p><div class="testi-author"><div class="testi-avatar" style="background:#00A1E0">DK</div><div><strong>David K.</strong><span>CTO, IBM Global Services</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">Marketing campaigns that used to take two weeks now launch in hours. Our agents personalize at a scale we couldn't imagine before.</p><div class="testi-author"><div class="testi-avatar" style="background:#F4820B">AL</div><div><strong>Aisha L.</strong><span>CMO, Toyota NA</span></div></div></div>
+    </div>
+  </div>
+
+  <div class="testi-track-wrap" style="margin-top:16px">
+    <div class="testi-track testi-track-right">
+      <div class="testi-card testi-card-accent"><p class="testi-quote">ROI in 6 weeks. I didn't think that was possible for an AI rollout — but Agentforce proved me wrong.</p><div class="testi-author"><div class="testi-avatar" style="background:#fff;color:#0070D2">PH</div><div><strong>Priya H.</strong><span>COO, Amazon Logistics</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">Our support deflection rate went from 40% to 78% in three months. Customers are happier, and so is my team.</p><div class="testi-author"><div class="testi-avatar" style="background:#032D60">TW</div><div><strong>Tom W.</strong><span>Head of CX, Telstra</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">No other platform gives us the combination of AI capability and data governance that Salesforce does. It's not close.</p><div class="testi-author"><div class="testi-avatar" style="background:#E8175D">SK</div><div><strong>Sara K.</strong><span>CISO, Global FinServ</span></div></div></div>
+      <div class="testi-card testi-card-dark"><p class="testi-quote">Agentforce let us scale customer onboarding 5× without adding headcount. That's the kind of leverage that changes a business.</p><div class="testi-author"><div class="testi-avatar" style="background:#00A1E0">CL</div><div><strong>Carlos L.</strong><span>CEO, Series B SaaS</span></div></div></div>
+      <div class="testi-card testi-card-accent"><p class="testi-quote">ROI in 6 weeks. I didn't think that was possible for an AI rollout — but Agentforce proved me wrong.</p><div class="testi-author"><div class="testi-avatar" style="background:#fff;color:#0070D2">PH</div><div><strong>Priya H.</strong><span>COO, Amazon Logistics</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">Our support deflection rate went from 40% to 78% in three months. Customers are happier, and so is my team.</p><div class="testi-author"><div class="testi-avatar" style="background:#032D60">TW</div><div><strong>Tom W.</strong><span>Head of CX, Telstra</span></div></div></div>
+      <div class="testi-card"><p class="testi-quote">No other platform gives us the combination of AI capability and data governance that Salesforce does. It's not close.</p><div class="testi-author"><div class="testi-avatar" style="background:#E8175D">SK</div><div><strong>Sara K.</strong><span>CISO, Global FinServ</span></div></div></div>
+      <div class="testi-card testi-card-dark"><p class="testi-quote">Agentforce let us scale customer onboarding 5× without adding headcount. That's the kind of leverage that changes a business.</p><div class="testi-author"><div class="testi-avatar" style="background:#00A1E0">CL</div><div><strong>Carlos L.</strong><span>CEO, Series B SaaS</span></div></div></div>
+    </div>
+  </div>
+</section>`,
+        css: `.testi-section {
+  background: #f5f5f7;
+  padding: 80px 0;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.testi-section .testi-header{ text-align:center;padding:0 32px;margin-bottom:52px; }
+
+.testi-section .testi-eyebrow{
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #0070D2;
+  margin-bottom: 12px;
+}
+
+.testi-section .testi-title{ font-size:40px;font-weight:800;color:#032D60;margin:0; }
+
+.testi-section .testi-track-wrap{
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+
+.testi-section .testi-track{ display:flex;gap:16px;width:max-content; }
+
+.testi-section .testi-track-left{ animation: scrollLeft  40s linear infinite; }
+.testi-section .testi-track-right{ animation: scrollRight 36s linear infinite; }
+
+.testi-section .testi-track-left:hover,
+.testi-section .testi-track-right:hover{ animation-play-state: paused; }
+
+@keyframes scrollLeft{ from{transform:translateX(0)} to{transform:translateX(-50%)} }
+@keyframes scrollRight{ from{transform:translateX(-50%)} to{transform:translateX(0)} }
+
+.testi-section .testi-card{
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 28px 24px;
+  width: 320px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  transition: box-shadow 0.2s;
+}
+
+.testi-section .testi-card:hover{ box-shadow:0 8px 28px rgba(0,0,0,0.12); }
+
+.testi-section .testi-card-dark{ background:#032D60; }
+.testi-section .testi-card-dark .testi-quote{ color:rgba(255,255,255,0.82); }
+.testi-section .testi-card-dark .testi-author strong{ color:#fff; }
+.testi-section .testi-card-dark .testi-author span{ color:rgba(255,255,255,0.5); }
+
+.testi-section .testi-card-accent{ background:linear-gradient(135deg,#0070D2,#00A1E0); }
+.testi-section .testi-card-accent .testi-quote{ color:rgba(255,255,255,0.9); }
+.testi-section .testi-card-accent .testi-author strong{ color:#fff; }
+.testi-section .testi-card-accent .testi-author span{ color:rgba(255,255,255,0.6); }
+
+.testi-section .testi-quote{
+  font-size: 14px;
+  color: #333;
+  line-height: 1.7;
+  margin: 0 0 20px;
+  font-style: italic;
+}
+
+.testi-section .testi-author{ display:flex;align-items:center;gap:12px; }
+
+.testi-section .testi-author strong{ display:block;font-size:13px;font-weight:700;color:#032D60; }
+.testi-section .testi-author span{ font-size:12px;color:#888;display:block; }
+
+.testi-section .testi-avatar{
+  width:38px;height:38px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:#fff;
+  flex-shrink:0;
+}`,
+        js: `// Rows pause on hover — handled in CSS.
+// Adjust animation-duration on .testi-track-left / .testi-track-right to change speed.`
+      },
+
+      // ── AURORA HERO ────────────────────────────────────────────────────────────
+      aurora: {
+        html: `<section class="aurora-section">
+  <div class="aurora-mesh"></div>
+  <div class="aurora-noise"></div>
+  <div class="aurora-content">
+    <div class="aurora-badge">
+      <span class="aurora-badge-dot"></span>
+      Now in General Availability
+    </div>
+    <h1 class="aurora-headline">Work smarter with<br><span class="aurora-gradient-text">AI that acts</span></h1>
+    <p class="aurora-body">Agentforce deploys autonomous agents across every department — grounded in your data, governed by your rules, ready on day one.</p>
+    <div class="aurora-actions">
+      <a href="#" class="aurora-btn-primary">Try Agentforce Free</a>
+      <a href="#" class="aurora-btn-ghost">Watch the demo</a>
+    </div>
+    <div class="aurora-social-proof">
+      <div class="aurora-avatars">
+        <div class="aurora-av" style="background:linear-gradient(135deg,#0070D2,#00A1E0)">J</div>
+        <div class="aurora-av" style="background:linear-gradient(135deg,#7B5EA7,#0070D2)">M</div>
+        <div class="aurora-av" style="background:linear-gradient(135deg,#00A1E0,#7B5EA7)">A</div>
+        <div class="aurora-av" style="background:linear-gradient(135deg,#032D60,#0070D2)">R</div>
+      </div>
+      <span class="aurora-proof-text">Joined by <strong>150,000+</strong> teams worldwide</span>
+    </div>
+  </div>
+</section>`,
+        css: `.aurora-section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #05070f;
+  overflow: hidden;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  padding: 60px 24px;
+}
+
+.aurora-section .aurora-mesh{
+  position: absolute;
+  inset: -50%;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 30%, rgba(0, 112, 210, 0.45) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 80% 70%, rgba(123, 94, 167, 0.4) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 55% 10%, rgba(0, 161, 224, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 70% at 10% 80%, rgba(3, 45, 96, 0.6) 0%, transparent 50%);
+  animation: auroraShift 12s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes auroraShift{
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(3%, -2%) scale(1.03); }
+  66%  { transform: translate(-2%, 3%) scale(0.98); }
+  100% { transform: translate(2%, 1%) scale(1.02); }
+}
+
+.aurora-section .aurora-noise{
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 200px;
+  pointer-events: none;
+}
+
+.aurora-section .aurora-content{
+  position: relative;
+  z-index: 2;
+  max-width: 740px;
+  text-align: center;
+}
+
+.aurora-section .aurora-badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 6px 16px;
+  margin-bottom: 28px;
+  backdrop-filter: blur(8px);
+}
+
+.aurora-section .aurora-badge-dot{
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #00A1E0;
+  box-shadow: 0 0 8px #00A1E0;
+  animation: auroraGlow 2s ease-in-out infinite;
+}
+
+@keyframes auroraGlow{
+  0%,100% { box-shadow: 0 0 6px #00A1E0; opacity: 1; }
+  50%      { box-shadow: 0 0 14px #00A1E0; opacity: 0.6; }
+}
+
+.aurora-section .aurora-headline{
+  font-size: 64px;
+  font-weight: 800;
+  line-height: 1.06;
+  color: #fff;
+  margin: 0 0 22px;
+  letter-spacing: -0.03em;
+}
+
+.aurora-section .aurora-gradient-text{
+  background: linear-gradient(90deg, #00A1E0 0%, #7B5EA7 50%, #0070D2 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: textShimmer 4s linear infinite;
+}
+
+@keyframes textShimmer{
+  0%   { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+.aurora-section .aurora-body{
+  font-size: 18px;
+  color: rgba(255,255,255,0.62);
+  line-height: 1.75;
+  margin: 0 0 40px;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.aurora-section .aurora-actions{
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 48px;
+}
+
+.aurora-section .aurora-btn-primary{
+  padding: 15px 34px;
+  background: #00A1E0;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 0 0 0 rgba(0,161,224,0);
+}
+.aurora-section .aurora-btn-primary:hover{
+  background: #0090c8;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,161,224,0.35);
+}
+
+.aurora-section .aurora-btn-ghost{
+  padding: 15px 28px;
+  color: rgba(255,255,255,0.8);
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  transition: background 0.15s, transform 0.15s;
+  backdrop-filter: blur(8px);
+}
+.aurora-section .aurora-btn-ghost:hover{ background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+
+.aurora-section .aurora-social-proof{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.aurora-section .aurora-avatars{ display: flex; }
+
+.aurora-section .aurora-av{
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid #05070f;
+  margin-left: -8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+}
+.aurora-section .aurora-avatars .aurora-av:first-child{ margin-left: 0; }
+
+.aurora-section .aurora-proof-text{
+  font-size: 13px;
+  color: rgba(255,255,255,0.45);
+}
+.aurora-section .aurora-proof-text strong{ color: rgba(255,255,255,0.75); }
+
+@media (max-width: 640px) {
+  .aurora-section .aurora-headline{ font-size: 40px; }
+  .aurora-section .aurora-body{ font-size: 16px; }
+}`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    console.log('CTA:', this.getAttribute('data-cta'));
+  });
+});`
+      },
+
+      // ── FEATURE TABS ───────────────────────────────────────────────────────────
+      tabs: {
+        html: `<section class="tabs-section">
+  <div class="tabs-inner">
+    <div class="tabs-header">
+      <span class="tabs-eyebrow">The Platform</span>
+      <h2 class="tabs-title">One platform.<br>Every team covered.</h2>
+    </div>
+    <div class="tabs-ui">
+      <div class="tabs-nav" role="tablist">
+        <button class="tab-btn tab-active" data-tab="sales" role="tab">Sales</button>
+        <button class="tab-btn" data-tab="service" role="tab">Service</button>
+        <button class="tab-btn" data-tab="marketing" role="tab">Marketing</button>
+        <button class="tab-btn" data-tab="analytics" role="tab">Analytics</button>
+      </div>
+      <div class="tabs-panels">
+
+        <div class="tab-panel tab-panel-active" id="tab-sales">
+          <div class="tab-copy">
+            <div class="tab-icon">🤝</div>
+            <h3 class="tab-panel-title">Sales Agent</h3>
+            <p class="tab-panel-body">Your AI sales rep never sleeps. It researches accounts, personalises outreach, and surfaces the highest-value opportunities — automatically, before your reps even open their laptops.</p>
+            <ul class="tab-list">
+              <li>Auto-research and account briefs</li>
+              <li>AI-drafted emails and follow-ups</li>
+              <li>Pipeline risk signals in real time</li>
+            </ul>
+            <a href="#" class="tab-cta">Explore Sales Agents →</a>
+          </div>
+          <div class="tab-visual tab-visual-sales">
+            <div class="tab-mock-card">
+              <div class="tab-mock-label">Next Best Action</div>
+              <div class="tab-mock-title">Follow up with Acme Corp</div>
+              <div class="tab-mock-sub">Deal value: $240k · Close probability: 78%</div>
+              <div class="tab-mock-bar"><div class="tab-mock-fill" style="width:78%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-service">
+          <div class="tab-copy">
+            <div class="tab-icon">💬</div>
+            <h3 class="tab-panel-title">Service Agent</h3>
+            <p class="tab-panel-body">Resolve cases 3× faster with agents that handle routine requests end-to-end, escalate intelligently, and leave every customer feeling heard.</p>
+            <ul class="tab-list">
+              <li>Instant deflection for common cases</li>
+              <li>Smart escalation with full context</li>
+              <li>CSAT improvement from day one</li>
+            </ul>
+            <a href="#" class="tab-cta">Explore Service Agents →</a>
+          </div>
+          <div class="tab-visual tab-visual-service">
+            <div class="tab-mock-card">
+              <div class="tab-mock-label">Case Resolved by Agent</div>
+              <div class="tab-mock-title">Password reset — Priya H.</div>
+              <div class="tab-mock-sub">Resolved in 12s · No human required</div>
+              <div class="tab-mock-badge">✓ Auto-resolved</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-marketing">
+          <div class="tab-copy">
+            <div class="tab-icon">📣</div>
+            <h3 class="tab-panel-title">Marketing Agent</h3>
+            <p class="tab-panel-body">From segment to send in minutes. Your marketing agent personalises every message, optimises send time, and reports back on what worked.</p>
+            <ul class="tab-list">
+              <li>Dynamic audience segmentation</li>
+              <li>AI copy and subject line variants</li>
+              <li>Automated campaign reporting</li>
+            </ul>
+            <a href="#" class="tab-cta">Explore Marketing Agents →</a>
+          </div>
+          <div class="tab-visual tab-visual-marketing">
+            <div class="tab-mock-card">
+              <div class="tab-mock-label">Campaign Performance</div>
+              <div class="tab-mock-title">Spring Launch — Segment A</div>
+              <div class="tab-mock-sub">Open rate: 42% · CTR: 11% · Revenue: $84k</div>
+              <div class="tab-mock-bar"><div class="tab-mock-fill" style="width:42%;background:#7B5EA7"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-analytics">
+          <div class="tab-copy">
+            <div class="tab-icon">📊</div>
+            <h3 class="tab-panel-title">Analytics Agent</h3>
+            <p class="tab-panel-body">Ask questions in plain English and get answers backed by your live Salesforce data — no SQL, no dashboards, no waiting for a data team.</p>
+            <ul class="tab-list">
+              <li>Natural language data queries</li>
+              <li>Proactive anomaly alerts</li>
+              <li>Executive summaries on demand</li>
+            </ul>
+            <a href="#" class="tab-cta">Explore Analytics Agents →</a>
+          </div>
+          <div class="tab-visual tab-visual-analytics">
+            <div class="tab-mock-card">
+              <div class="tab-mock-label">AI Answer</div>
+              <div class="tab-mock-title">"Why did Q3 revenue dip?"</div>
+              <div class="tab-mock-sub">Churn in EMEA segment up 14% — 3 at-risk accounts flagged</div>
+              <div class="tab-mock-badge" style="background:rgba(123,94,167,0.12);color:#7B5EA7">↗ View breakdown</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>`,
+        css: `.tabs-section {
+  background: #f5f5f7;
+  padding: 88px 32px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.tabs-section .tabs-inner{ max-width: 1100px; margin: 0 auto; }
+
+.tabs-section .tabs-header{ text-align: center; margin-bottom: 52px; }
+
+.tabs-section .tabs-eyebrow{
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #0070D2; margin-bottom: 14px;
+}
+
+.tabs-section .tabs-title{
+  font-size: 44px; font-weight: 800;
+  color: #032D60; margin: 0; line-height: 1.1;
+}
+
+.tabs-section .tabs-nav{
+  display: flex;
+  gap: 4px;
+  background: #e8e8ed;
+  border-radius: 12px;
+  padding: 4px;
+  width: fit-content;
+  margin: 0 auto 40px;
+}
+
+.tabs-section .tab-btn{
+  padding: 10px 24px;
+  font-size: 14px; font-weight: 600;
+  border: none; background: none;
+  border-radius: 9px;
+  color: #666; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tabs-section .tab-btn:hover{ color: #032D60; }
+
+.tabs-section .tab-active{
+  background: #fff;
+  color: #032D60;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+}
+
+.tabs-section .tab-panel{ display: none; gap: 64px; align-items: center; }
+.tabs-section .tab-panel-active{ display: flex; }
+
+.tabs-section .tab-copy{ flex: 1; min-width: 0; }
+
+.tabs-section .tab-icon{ font-size: 38px; margin-bottom: 18px; display: block; }
+
+.tabs-section .tab-panel-title{
+  font-size: 30px; font-weight: 800;
+  color: #032D60; margin: 0 0 14px;
+}
+
+.tabs-section .tab-panel-body{
+  font-size: 16px; color: #555;
+  line-height: 1.75; margin: 0 0 24px;
+}
+
+.tabs-section .tab-list{
+  list-style: none; padding: 0; margin: 0 0 28px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.tabs-section .tab-list li{
+  font-size: 14px; font-weight: 600; color: #333;
+  padding-left: 22px; position: relative;
+}
+
+.tabs-section .tab-list li::before{
+  content: '✓';
+  position: absolute; left: 0;
+  color: #0070D2; font-weight: 700;
+}
+
+.tabs-section .tab-cta{
+  font-size: 14px; font-weight: 700;
+  color: #0070D2; text-decoration: none;
+}
+.tabs-section .tab-cta:hover{ text-decoration: underline; }
+
+.tabs-section .tab-visual{
+  flex: 1; min-width: 0;
+  border-radius: 20px; padding: 32px;
+  min-height: 240px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.tabs-section .tab-visual-sales{ background: linear-gradient(135deg, #e8f4ff, #d0eaff); }
+.tabs-section .tab-visual-service{ background: linear-gradient(135deg, #e8fff4, #d0ffe8); }
+.tabs-section .tab-visual-marketing{ background: linear-gradient(135deg, #f4e8ff, #ead0ff); }
+.tabs-section .tab-visual-analytics{ background: linear-gradient(135deg, #fff4e8, #ffddb3); }
+
+.tabs-section .tab-mock-card{
+  background: #fff;
+  border-radius: 14px;
+  padding: 24px;
+  width: 100%;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.tabs-section .tab-mock-label{
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: #0070D2; margin-bottom: 10px;
+}
+
+.tabs-section .tab-mock-title{
+  font-size: 16px; font-weight: 700;
+  color: #032D60; margin-bottom: 6px;
+}
+
+.tabs-section .tab-mock-sub{
+  font-size: 13px; color: #888; margin-bottom: 14px;
+}
+
+.tabs-section .tab-mock-bar{
+  height: 6px; background: #eee; border-radius: 3px; overflow: hidden;
+}
+
+.tabs-section .tab-mock-fill{
+  height: 100%; background: #0070D2; border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.tabs-section .tab-mock-badge{
+  display: inline-block;
+  font-size: 12px; font-weight: 600;
+  padding: 5px 12px; border-radius: 20px;
+  background: rgba(0,112,210,0.1); color: #0070D2;
+}
+
+@media (max-width: 768px) {
+  .tabs-section .tab-panel-active{ flex-direction: column; }
+  .tabs-section .tabs-title{ font-size: 32px; }
+  .tabs-section .tabs-nav{ overflow-x: auto; width: 100%; }
+}`,
+        js: `(function () {
+  var btns   = document.querySelectorAll('.tab-btn');
+  var panels = document.querySelectorAll('.tab-panel');
+
+  btns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var target = this.getAttribute('data-tab');
+
+      btns.forEach(function (b) { b.classList.remove('tab-active'); });
+      panels.forEach(function (p) { p.classList.remove('tab-panel-active'); });
+
+      this.classList.add('tab-active');
+      var panel = document.getElementById('tab-' + target);
+      if (panel) panel.classList.add('tab-panel-active');
+    });
+  });
+
+  document.querySelectorAll('[data-cta]').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      console.log('CTA:', this.getAttribute('data-cta'));
+    });
+  });
+})();`
+      },
+
+      // ── SPLIT SCREEN ───────────────────────────────────────────────────────────
+      split: {
+        html: `<section class="split-section">
+  <div class="split-copy">
+    <span class="split-eyebrow">Built Different</span>
+    <h2 class="split-title">AI that works <em>with</em> your team, not around it</h2>
+    <p class="split-body">Agentforce agents don't replace your people — they handle the repetitive work so your team can focus on what only humans can do: build relationships, solve hard problems, and drive strategy.</p>
+    <div class="split-features">
+      <div class="split-feature">
+        <div class="split-feature-icon">🔒</div>
+        <div>
+          <strong>Trusted by design</strong>
+          <p>Every action is logged, auditable, and governed by your existing Salesforce permissions.</p>
+        </div>
+      </div>
+      <div class="split-feature">
+        <div class="split-feature-icon">⚡</div>
+        <div>
+          <strong>Live from day one</strong>
+          <p>No months-long implementation. Connect your data, configure your agent, go live in hours.</p>
+        </div>
+      </div>
+      <div class="split-feature">
+        <div class="split-feature-icon">🔗</div>
+        <div>
+          <strong>Works with what you have</strong>
+          <p>Native integrations with Slack, Teams, SAP, Workday, and 1,000+ more.</p>
+        </div>
+      </div>
+    </div>
+    <a href="#" class="split-cta">Learn how it works →</a>
+  </div>
+  <div class="split-visual">
+    <div class="split-bg-shape"></div>
+    <div class="split-card split-card-1">
+      <div class="split-card-dot"></div>
+      <div class="split-card-content">
+        <span class="split-card-label">Agent Activity</span>
+        <span class="split-card-val">247 tasks completed today</span>
+      </div>
+    </div>
+    <div class="split-card split-card-2">
+      <div class="split-card-dot" style="background:#22c55e"></div>
+      <div class="split-card-content">
+        <span class="split-card-label">Time Saved</span>
+        <span class="split-card-val">18.4 hours · this week</span>
+      </div>
+    </div>
+    <div class="split-card split-card-3">
+      <div class="split-card-dot" style="background:#7B5EA7"></div>
+      <div class="split-card-content">
+        <span class="split-card-label">CSAT Score</span>
+        <span class="split-card-val">4.9 / 5.0 ↑</span>
+      </div>
+    </div>
+  </div>
+</section>`,
+        css: `.split-section {
+  display: flex;
+  align-items: center;
+  min-height: 100vh;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.split-section .split-copy{
+  flex: 1;
+  padding: 80px 64px 80px 80px;
+  max-width: 560px;
+}
+
+.split-section .split-eyebrow{
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #0070D2; margin-bottom: 18px;
+}
+
+.split-section .split-title{
+  font-size: 42px; font-weight: 800;
+  color: #032D60; margin: 0 0 20px; line-height: 1.12;
+}
+
+.split-section .split-title em{ font-style: italic; color: #0070D2; }
+
+.split-section .split-body{
+  font-size: 16px; color: #555;
+  line-height: 1.8; margin: 0 0 36px;
+}
+
+.split-section .split-features{
+  display: flex; flex-direction: column; gap: 24px;
+  margin-bottom: 36px;
+}
+
+.split-section .split-feature{
+  display: flex; gap: 16px; align-items: flex-start;
+}
+
+.split-section .split-feature-icon{
+  font-size: 22px; flex-shrink: 0;
+  width: 44px; height: 44px;
+  background: #f0f7ff;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.split-section .split-feature strong{
+  display: block; font-size: 15px;
+  color: #032D60; margin-bottom: 4px;
+}
+
+.split-section .split-feature p{
+  font-size: 13px; color: #777;
+  margin: 0; line-height: 1.6;
+}
+
+.split-section .split-cta{
+  font-size: 15px; font-weight: 700;
+  color: #0070D2; text-decoration: none;
+}
+.split-section .split-cta:hover{ text-decoration: underline; }
+
+.split-section .split-visual{
+  flex: 1;
+  background: linear-gradient(135deg, #032D60 0%, #0070D2 100%);
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.split-section .split-bg-shape{
+  position: absolute;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,161,224,0.25) 0%, transparent 65%);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.split-section .split-card{
+  position: absolute;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(12px);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex; gap: 12px; align-items: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  min-width: 220px;
+  animation: splitFloat 6s ease-in-out infinite;
+}
+
+.split-section .split-card-1{ top: 22%; left: 10%; animation-delay: 0s; }
+.split-section .split-card-2{ top: 50%; right: 8%; animation-delay: -2s; }
+.split-section .split-card-3{ bottom: 20%; left: 15%; animation-delay: -4s; }
+
+@keyframes splitFloat{
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+
+.split-section .split-card-dot{
+  width: 10px; height: 10px;
+  border-radius: 50%; background: #0070D2; flex-shrink: 0;
+}
+
+.split-section .split-card-content{ display: flex; flex-direction: column; gap: 2px; }
+
+.split-section .split-card-label{
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: #999;
+}
+
+.split-section .split-card-val{
+  font-size: 14px; font-weight: 700; color: #032D60;
+}
+
+@media (max-width: 900px) {
+  .split-section { flex-direction: column; }
+  .split-section .split-copy{ padding: 60px 32px; max-width: 100%; }
+  .split-section .split-visual{ min-height: 400px; width: 100%; }
+  .split-section .split-title{ font-size: 32px; }
+}`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function(el) {
+  el.addEventListener('click', function(e) {
+    e.preventDefault();
+    console.log('CTA:', this.getAttribute('data-cta'));
+  });
+});`
+      },
+
+      // ── SCROLL REVEAL ──────────────────────────────────────────────────────────
+      reveal: {
+        html: `<section class="reveal-section">
+  <div class="reveal-inner">
+    <div class="reveal-header">
+      <span class="reveal-eyebrow">How It Works</span>
+      <h2 class="reveal-title">From zero to agent<br>in four steps</h2>
+    </div>
+    <div class="reveal-steps">
+
+      <div class="reveal-step" data-step="1">
+        <div class="reveal-step-num">01</div>
+        <div class="reveal-step-body">
+          <h3 class="reveal-step-title">Connect your data</h3>
+          <p class="reveal-step-text">Point Agentforce at your Salesforce org. Your CRM data, knowledge base, and existing automations become the agent's foundation — no migration required.</p>
+        </div>
+        <div class="reveal-step-visual rv-visual-1">
+          <div class="rv-icon-row">
+            <span class="rv-chip">Salesforce CRM</span>
+            <span class="rv-chip">Knowledge Base</span>
+            <span class="rv-chip">External APIs</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal-step reveal-step-flip" data-step="2">
+        <div class="reveal-step-num">02</div>
+        <div class="reveal-step-body">
+          <h3 class="reveal-step-title">Define your agent</h3>
+          <p class="reveal-step-text">Use Agentforce Studio to describe what your agent should do in plain language. Set guardrails, handoff rules, and tone — no code, no prompts to engineer.</p>
+        </div>
+        <div class="reveal-step-visual rv-visual-2">
+          <div class="rv-prompt-box">
+            <span class="rv-prompt-label">Agent Instruction</span>
+            <p class="rv-prompt-text">"When a customer asks about their order status, look it up and respond. If it's delayed more than 3 days, offer a 10% discount."</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal-step" data-step="3">
+        <div class="reveal-step-num">03</div>
+        <div class="reveal-step-body">
+          <h3 class="reveal-step-title">Test and refine</h3>
+          <p class="reveal-step-text">Run your agent against real scenarios in a sandbox. The built-in conversation tester shows exactly what the agent would say and do, so you can tune before going live.</p>
+        </div>
+        <div class="reveal-step-visual rv-visual-3">
+          <div class="rv-test-row">
+            <div class="rv-test-msg rv-user">What's my order status?</div>
+            <div class="rv-test-msg rv-agent">Your order #4821 ships tomorrow. Track it here →</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="reveal-step reveal-step-flip" data-step="4">
+        <div class="reveal-step-num">04</div>
+        <div class="reveal-step-body">
+          <h3 class="reveal-step-title">Deploy everywhere</h3>
+          <p class="reveal-step-text">Go live on your website, Slack, mobile app, or any channel — with one click. Monitor performance in real time and update your agent anytime without downtime.</p>
+        </div>
+        <div class="reveal-step-visual rv-visual-4">
+          <div class="rv-icon-row">
+            <span class="rv-chip rv-chip-dark">Web Chat</span>
+            <span class="rv-chip rv-chip-dark">Slack</span>
+            <span class="rv-chip rv-chip-dark">Mobile</span>
+            <span class="rv-chip rv-chip-dark">Email</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>`,
+        css: `.reveal-section {
+  background: #fff;
+  padding: 88px 32px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.reveal-section .reveal-inner{ max-width: 1060px; margin: 0 auto; }
+
+.reveal-section .reveal-header{ text-align: center; margin-bottom: 72px; }
+
+.reveal-section .reveal-eyebrow{
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #0070D2; margin-bottom: 14px;
+}
+
+.reveal-section .reveal-title{
+  font-size: 44px; font-weight: 800;
+  color: #032D60; margin: 0; line-height: 1.1;
+}
+
+.reveal-section .reveal-steps{
+  display: flex; flex-direction: column; gap: 40px;
+}
+
+.reveal-section .reveal-step{
+  display: flex;
+  align-items: center;
+  gap: 56px;
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.reveal-section .reveal-step.is-visible{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-section .reveal-step-flip{ flex-direction: row-reverse; }
+
+.reveal-section .reveal-step-num{
+  font-size: 72px; font-weight: 800;
+  color: #e8eef6; line-height: 1;
+  flex-shrink: 0; width: 80px;
+  text-align: center;
+  transition: color 0.4s ease;
+}
+
+.reveal-section .reveal-step.is-visible .reveal-step-num{ color: #c8d8f0; }
+
+.reveal-section .reveal-step-body{ flex: 1; }
+
+.reveal-section .reveal-step-title{
+  font-size: 26px; font-weight: 800;
+  color: #032D60; margin: 0 0 12px;
+}
+
+.reveal-section .reveal-step-text{
+  font-size: 15px; color: #555;
+  line-height: 1.8; margin: 0;
+}
+
+.reveal-section .reveal-step-visual{
+  flex: 1;
+  border-radius: 18px;
+  padding: 28px 24px;
+  min-height: 140px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.reveal-section .rv-visual-1{ background: #f0f7ff; }
+.reveal-section .rv-visual-2{ background: #f5f0ff; }
+.reveal-section .rv-visual-3{ background: #f0fff5; }
+.reveal-section .rv-visual-4{ background: #032D60; }
+
+.reveal-section .rv-icon-row{
+  display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+}
+
+.reveal-section .rv-chip{
+  font-size: 13px; font-weight: 600;
+  padding: 8px 16px; border-radius: 20px;
+  background: #fff; color: #0070D2;
+  border: 1px solid rgba(0,112,210,0.2);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.reveal-section .rv-chip-dark{
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.9);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.reveal-section .rv-prompt-box{
+  background: #fff;
+  border-radius: 12px; padding: 18px 20px;
+  width: 100%;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+}
+
+.reveal-section .rv-prompt-label{
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: #7B5EA7; display: block; margin-bottom: 8px;
+}
+
+.reveal-section .rv-prompt-text{
+  font-size: 13px; color: #333;
+  line-height: 1.65; margin: 0;
+  font-style: italic;
+}
+
+.reveal-section .rv-test-row{
+  display: flex; flex-direction: column; gap: 10px; width: 100%;
+}
+
+.reveal-section .rv-test-msg{
+  font-size: 13px; font-weight: 500;
+  padding: 10px 14px; border-radius: 10px;
+  max-width: 85%;
+}
+
+.reveal-section .rv-user{ background: #e8f4ff; color: #032D60; align-self: flex-end; border-bottom-right-radius: 3px; }
+.reveal-section .rv-agent{ background: #fff; color: #333; align-self: flex-start; border-bottom-left-radius: 3px; box-shadow: 0 1px 6px rgba(0,0,0,0.08); }
+
+@media (max-width: 768px) {
+  .reveal-section .reveal-step, .reveal-section .reveal-step-flip{ flex-direction: column; }
+  .reveal-section .reveal-title{ font-size: 32px; }
+  .reveal-section .reveal-step-num{ font-size: 48px; width: auto; }
+}`,
+        js: `(function () {
+  var steps = document.querySelectorAll('.reveal-step');
+
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.2 });
+    steps.forEach(function (s) { observer.observe(s); });
+  } else {
+    steps.forEach(function (s) { s.classList.add('is-visible'); });
+  }
+
+  // Trigger immediately for items already in view (iframe fallback)
+  setTimeout(function () {
+    steps.forEach(function (s) { s.classList.add('is-visible'); });
+  }, 200);
+})();`
+      },
+      // ── LOGO WALL ──────────────────────────────────────────────────────────────
+      logowall: {
+        html: `<section class="lw-section">
+  <div class="lw-header">
+    <p class="lw-label">Trusted by 150,000+ companies worldwide</p>
+  </div>
+
+  <div class="lw-track-wrap">
+    <div class="lw-track lw-track-fwd">
+      <div class="lw-logo">Amazon</div>
+      <div class="lw-logo">Marriott</div>
+      <div class="lw-logo">IBM</div>
+      <div class="lw-logo">Adidas</div>
+      <div class="lw-logo">Toyota</div>
+      <div class="lw-logo">Telstra</div>
+      <div class="lw-logo">Spotify</div>
+      <div class="lw-logo">Unilever</div>
+      <div class="lw-logo">Amazon</div>
+      <div class="lw-logo">Marriott</div>
+      <div class="lw-logo">IBM</div>
+      <div class="lw-logo">Adidas</div>
+      <div class="lw-logo">Toyota</div>
+      <div class="lw-logo">Telstra</div>
+      <div class="lw-logo">Spotify</div>
+      <div class="lw-logo">Unilever</div>
+    </div>
+  </div>
+
+  <div class="lw-track-wrap" style="margin-top:16px">
+    <div class="lw-track lw-track-rev">
+      <div class="lw-logo">Salesforce</div>
+      <div class="lw-logo">Slack</div>
+      <div class="lw-logo">ServiceNow</div>
+      <div class="lw-logo">Workday</div>
+      <div class="lw-logo">SAP</div>
+      <div class="lw-logo">Atlassian</div>
+      <div class="lw-logo">HubSpot</div>
+      <div class="lw-logo">Zendesk</div>
+      <div class="lw-logo">Salesforce</div>
+      <div class="lw-logo">Slack</div>
+      <div class="lw-logo">ServiceNow</div>
+      <div class="lw-logo">Workday</div>
+      <div class="lw-logo">SAP</div>
+      <div class="lw-logo">Atlassian</div>
+      <div class="lw-logo">HubSpot</div>
+      <div class="lw-logo">Zendesk</div>
+    </div>
+  </div>
+
+  <div class="lw-footer">
+    <a href="#" class="lw-cta">Read customer stories →</a>
+  </div>
+</section>`,
+        css: `.lw-section {
+  background: #fff;
+  padding: 64px 0 52px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.lw-section .lw-header{ text-align: center; padding: 0 32px; margin-bottom: 36px; }
+
+.lw-section .lw-label{
+  font-size: 13px; font-weight: 600;
+  color: #aaa; letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.lw-section .lw-track-wrap{
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%);
+}
+
+.lw-section .lw-track{
+  display: flex;
+  gap: 0;
+  width: max-content;
+}
+
+.lw-section .lw-track-fwd{ animation: lwFwd 28s linear infinite; }
+.lw-section .lw-track-rev{ animation: lwRev 22s linear infinite; }
+
+.lw-section .lw-track-fwd:hover,
+.lw-section .lw-track-rev:hover{ animation-play-state: paused; }
+
+@keyframes lwFwd{ from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes lwRev{ from { transform: translateX(-50%); } to { transform: translateX(0); } }
+
+.lw-section .lw-logo{
+  padding: 0 40px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #ccc;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  line-height: 52px;
+  transition: color 0.2s;
+  cursor: default;
+  position: relative;
+}
+
+.lw-section .lw-logo::after{
+  content: '';
+  position: absolute;
+  right: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 1px; height: 20px;
+  background: #eee;
+}
+
+.lw-section .lw-logo:hover{ color: #0070D2; }
+
+.lw-section .lw-footer{ text-align: center; margin-top: 32px; padding: 0 32px; }
+
+.lw-section .lw-cta{
+  font-size: 14px; font-weight: 600;
+  color: #0070D2; text-decoration: none;
+}
+.lw-section .lw-cta:hover{ text-decoration: underline; }`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function (el) {
+  el.addEventListener('click', function (e) {
+    e.preventDefault();
+    console.log('CTA:', this.getAttribute('data-cta'));
+  });
+});`
+      },
+      // ── CTA BANNER ─────────────────────────────────────────────────────────────
+      ctabanner: {
+        html: `<section class="ctab-section">
+  <div class="ctab-glow ctab-glow-l"></div>
+  <div class="ctab-glow ctab-glow-r"></div>
+  <div class="ctab-inner">
+    <div class="ctab-copy">
+      <span class="ctab-eyebrow">Get Started Today</span>
+      <h2 class="ctab-title">Your AI workforce is one click away</h2>
+      <p class="ctab-sub">Join 150,000+ companies using Agentforce to work smarter, move faster, and grow bigger.</p>
+    </div>
+    <div class="ctab-actions">
+      <a href="#" class="ctab-btn-primary">Start for Free</a>
+      <a href="#" class="ctab-btn-ghost">Request a Demo</a>
+      <p class="ctab-note">No credit card required · Free forever plan available</p>
+    </div>
+  </div>
+</section>`,
+        css: `.ctab-section {
+  position: relative;
+  background: linear-gradient(120deg, #032D60 0%, #0070D2 100%);
+  padding: 88px 48px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.ctab-section .ctab-glow{
+  position: absolute;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  filter: blur(100px);
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.ctab-section .ctab-glow-l{ background: rgba(0,161,224,0.6); top: -180px; left: -100px; }
+.ctab-section .ctab-glow-r{ background: rgba(123,94,167,0.5); bottom: -180px; right: -100px; }
+
+.ctab-section .ctab-inner{
+  position: relative; z-index: 1;
+  max-width: 1060px; margin: 0 auto;
+  display: flex; align-items: center;
+  justify-content: space-between;
+  gap: 48px; flex-wrap: wrap;
+}
+
+.ctab-section .ctab-copy{ flex: 1; min-width: 280px; }
+
+.ctab-section .ctab-eyebrow{
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #00A1E0; margin-bottom: 16px;
+}
+
+.ctab-section .ctab-title{
+  font-size: 40px; font-weight: 800;
+  color: #fff; margin: 0 0 14px; line-height: 1.1;
+}
+
+.ctab-section .ctab-sub{
+  font-size: 16px; color: rgba(255,255,255,0.7);
+  margin: 0; line-height: 1.7;
+}
+
+.ctab-section .ctab-actions{
+  display: flex; flex-direction: column;
+  align-items: flex-start; gap: 14px;
+  flex-shrink: 0;
+}
+
+.ctab-section .ctab-btn-primary{
+  display: inline-block;
+  padding: 16px 36px;
+  background: #fff; color: #032D60;
+  font-size: 16px; font-weight: 700;
+  border-radius: 10px; text-decoration: none;
+  transition: background 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.ctab-section .ctab-btn-primary:hover{ background: #e8f4ff; transform: translateY(-2px); }
+
+.ctab-section .ctab-btn-ghost{
+  display: inline-block;
+  padding: 16px 36px;
+  color: #fff;
+  font-size: 16px; font-weight: 600;
+  border-radius: 10px; text-decoration: none;
+  border: 2px solid rgba(255,255,255,0.35);
+  transition: border-color 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.ctab-section .ctab-btn-ghost:hover{ border-color: #fff; transform: translateY(-2px); }
+
+.ctab-section .ctab-note{
+  font-size: 12px; color: rgba(255,255,255,0.45);
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .ctab-section { padding: 64px 32px; }
+  .ctab-section .ctab-inner{ flex-direction: column; align-items: flex-start; }
+  .ctab-section .ctab-title{ font-size: 30px; }
+  .ctab-section .ctab-actions{ width: 100%; }
+  .ctab-section .ctab-btn-primary, .ctab-section .ctab-btn-ghost{ width: 100%; text-align: center; }
+}`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function (el) {
+  el.addEventListener('click', function (e) {
+    e.preventDefault();
+    console.log('CTA:', this.getAttribute('data-cta'));
+  });
+});`
+      },
+
+      // ── TIMELINE ───────────────────────────────────────────────────────────────
+      timeline: {
+        html: `<section class="tl-section">
+  <div class="tl-inner">
+    <div class="tl-header">
+      <span class="tl-eyebrow">Our Journey</span>
+      <h2 class="tl-title">Building the future of AI, one milestone at a time</h2>
+    </div>
+    <div class="tl-track-wrap">
+      <div class="tl-line"></div>
+      <div class="tl-items">
+
+        <div class="tl-item" data-year="2019">
+          <div class="tl-dot"></div>
+          <div class="tl-card">
+            <span class="tl-year">2019</span>
+            <h3 class="tl-card-title">Einstein AI Launched</h3>
+            <p class="tl-card-body">Salesforce introduces Einstein AI, embedding predictive intelligence directly into the CRM — the foundation of everything that follows.</p>
+          </div>
+        </div>
+
+        <div class="tl-item tl-item-below" data-year="2021">
+          <div class="tl-dot"></div>
+          <div class="tl-card">
+            <span class="tl-year">2021</span>
+            <h3 class="tl-card-title">Flow Automation</h3>
+            <p class="tl-card-body">No-code automation reaches millions of Salesforce users, making complex business processes configurable without engineers.</p>
+          </div>
+        </div>
+
+        <div class="tl-item" data-year="2023">
+          <div class="tl-dot tl-dot-featured"></div>
+          <div class="tl-card tl-card-featured">
+            <span class="tl-year" style="color:#00A1E0">2023</span>
+            <h3 class="tl-card-title">Einstein Copilot</h3>
+            <p class="tl-card-body">Generative AI lands in every Salesforce cloud. Users can ask questions, draft content, and summarise data in plain English — right inside their CRM.</p>
+          </div>
+        </div>
+
+        <div class="tl-item tl-item-below" data-year="2024">
+          <div class="tl-dot"></div>
+          <div class="tl-card">
+            <span class="tl-year">2024</span>
+            <h3 class="tl-card-title">Agentforce 1.0</h3>
+            <p class="tl-card-body">The first truly autonomous AI agent platform for CRM. Agents that don't just answer — they act, decide, and complete tasks end-to-end.</p>
+          </div>
+        </div>
+
+        <div class="tl-item" data-year="2025">
+          <div class="tl-dot tl-dot-now"></div>
+          <div class="tl-card">
+            <span class="tl-year" style="color:#0070D2">2025</span>
+            <h3 class="tl-card-title">Agentforce 2.0 — Now</h3>
+            <p class="tl-card-body">Multi-agent orchestration, the Agentforce Marketplace, and 1,000+ partner integrations. The AI workforce era begins.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>`,
+        css: `.tl-section {
+  background: #f5f5f7;
+  padding: 88px 32px 100px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  overflow: hidden;
+}
+
+.tl-section .tl-inner{ max-width: 1100px; margin: 0 auto; }
+
+.tl-section .tl-header{ text-align: center; margin-bottom: 72px; }
+
+.tl-section .tl-eyebrow{
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #0070D2; margin-bottom: 14px;
+}
+
+.tl-section .tl-title{ font-size: 40px; font-weight: 800; color: #032D60; margin: 0; line-height: 1.1; max-width: 640px; margin-left: auto; margin-right: auto; }
+
+.tl-section .tl-track-wrap{ position: relative; }
+
+.tl-section .tl-line{
+  position: absolute;
+  top: 20px; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #d1e3f8 10%, #d1e3f8 90%, transparent);
+  z-index: 0;
+}
+
+.tl-section .tl-items{
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative; z-index: 1;
+}
+
+.tl-section .tl-item{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.tl-section .tl-item-below{ flex-direction: column-reverse; }
+.tl-section .tl-item-below .tl-card{ margin-bottom: 0; margin-top: 0; }
+
+.tl-section .tl-dot{
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #d1e3f8;
+  border: 3px solid #f5f5f7;
+  box-shadow: 0 0 0 2px #b0cef0;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+  margin: 12px 0;
+}
+
+.tl-section .tl-dot-featured{
+  width: 20px; height: 20px;
+  background: #0070D2;
+  box-shadow: 0 0 0 3px rgba(0,112,210,0.25);
+}
+
+.tl-section .tl-dot-now{
+  width: 20px; height: 20px;
+  background: #00A1E0;
+  box-shadow: 0 0 0 5px rgba(0,161,224,0.2);
+  animation: tlPulse 2s ease-in-out infinite;
+}
+
+@keyframes tlPulse{
+  0%,100% { box-shadow: 0 0 0 4px rgba(0,161,224,0.2); }
+  50%      { box-shadow: 0 0 0 8px rgba(0,161,224,0.08); }
+}
+
+.tl-section .tl-item:hover .tl-dot{ transform: scale(1.3); }
+
+.tl-section .tl-card{
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px 18px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  width: 100%;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.tl-section .tl-card:hover{
+  transform: translateY(-4px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.11);
+}
+
+.tl-section .tl-card-featured{
+  border: 2px solid rgba(0,112,210,0.2);
+  background: linear-gradient(135deg, #f0f7ff, #fff);
+}
+
+.tl-section .tl-year{
+  display: block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: #aaa; margin-bottom: 6px;
+}
+
+.tl-section .tl-card-title{
+  font-size: 15px; font-weight: 700;
+  color: #032D60; margin: 0 0 8px;
+}
+
+.tl-section .tl-card-body{
+  font-size: 12px; color: #666;
+  line-height: 1.65; margin: 0;
+}
+
+@media (max-width: 900px) {
+  .tl-section .tl-items{ flex-direction: column; }
+  .tl-section .tl-line{ display: none; }
+  .tl-section .tl-item, .tl-section .tl-item-below{ flex-direction: row; align-items: flex-start; gap: 16px; }
+  .tl-section .tl-item-below{ flex-direction: row; }
+  .tl-section .tl-dot{ margin: 4px 0 0; }
+  .tl-section .tl-title{ font-size: 28px; }
+}`,
+        js: `// No JS required — pure CSS animations.
+// To add click-to-expand cards, use the faq accordion pattern.`
+      },
+
+      // ── MINIMAL HERO ───────────────────────────────────────────────────────────
+      minimal: {
+        html: `<section class="mh-section">
+  <div class="mh-inner">
+    <a href="#" class="mh-announce">
+      <span class="mh-announce-badge">New</span>
+      Agentforce 2.0 is here — multi-agent orchestration
+      <span class="mh-announce-arrow">→</span>
+    </a>
+    <h1 class="mh-headline">The AI platform<br>built for <span class="mh-cycle" id="mh-cycle">sales</span></h1>
+    <p class="mh-body">Deploy autonomous agents across every team. No code. No limits. Grounded in your Salesforce data from day one.</p>
+    <div class="mh-actions">
+      <a href="#" class="mh-btn-primary">Get started free</a>
+      <a href="#" class="mh-btn-ghost">See a demo</a>
+    </div>
+    <div class="mh-meta">
+      <span>No credit card required</span>
+      <span class="mh-dot">·</span>
+      <span>Free plan available</span>
+      <span class="mh-dot">·</span>
+      <span>Live in hours</span>
+    </div>
+  </div>
+</section>`,
+        css: `.mh-section {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  padding: 60px 24px;
+}
+
+.mh-section .mh-inner{
+  max-width: 720px;
+  text-align: center;
+}
+
+.mh-section .mh-announce{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+  background: #f5f5f7;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 5px 14px 5px 6px;
+  text-decoration: none;
+  margin-bottom: 32px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.mh-section .mh-announce:hover{ border-color: #0070D2; color: #0070D2; }
+
+.mh-section .mh-announce-badge{
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: #0070D2;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.mh-section .mh-announce-arrow{ color: #0070D2; }
+
+.mh-section .mh-headline{
+  font-size: 72px;
+  font-weight: 800;
+  line-height: 1.04;
+  color: #032D60;
+  letter-spacing: -0.04em;
+  margin: 0 0 24px;
+}
+
+.mh-section .mh-cycle{
+  color: #0070D2;
+  border-bottom: 3px solid #0070D2;
+  padding-bottom: 2px;
+}
+
+.mh-section .mh-body{
+  font-size: 18px;
+  color: #6b7280;
+  line-height: 1.75;
+  margin: 0 0 40px;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mh-section .mh-actions{
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.mh-section .mh-btn-primary{
+  padding: 14px 32px;
+  background: #032D60;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.15s;
+}
+.mh-section .mh-btn-primary:hover{ background: #0070D2; transform: translateY(-1px); }
+
+.mh-section .mh-btn-ghost{
+  padding: 14px 28px;
+  color: #032D60;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  border: 1.5px solid #e5e7eb;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.mh-section .mh-btn-ghost:hover{ border-color: #032D60; transform: translateY(-1px); }
+
+.mh-section .mh-meta{
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #aaa;
+  flex-wrap: wrap;
+}
+
+.mh-section .mh-dot{ color: #ddd; }
+
+@media (max-width: 600px) {
+  .mh-section .mh-headline{ font-size: 44px; }
+}`,
+        js: `(function () {
+  var words = ['sales', 'service', 'marketing', 'ops', 'every team'];
+  var idx = 0;
+  var el  = document.getElementById('mh-cycle');
+  if (!el) return;
+  setInterval(function () {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(-6px)';
+    el.style.transition = 'opacity 0.2s, transform 0.2s';
+    setTimeout(function () {
+      idx = (idx + 1) % words.length;
+      el.textContent = words[idx];
+      el.style.transform = 'translateY(4px)';
+      setTimeout(function () {
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      }, 30);
+    }, 200);
+  }, 2000);
+
+  document.querySelectorAll('[data-cta]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) { e.preventDefault(); });
+  });
+})();`
+      },
+
+      // ── VIDEO HERO ─────────────────────────────────────────────────────────────
+      videohero: {
+        html: `<section class="vh-section">
+  <video class="vh-video" autoplay muted loop playsinline>
+    <source src="https://videos.pexels.com/video-files/3163534/3163534-uhd_2560_1440_30fps.mp4" type="video/mp4">
+  </video>
+  <div class="vh-overlay"></div>
+  <div class="vh-content">
+    <span class="vh-eyebrow">Agentforce Live</span>
+    <h1 class="vh-headline">AI that doesn't<br>just talk — it works</h1>
+    <p class="vh-body">Watch Agentforce close deals, resolve cases, and run campaigns — autonomously, at scale, around the clock.</p>
+    <div class="vh-actions">
+      <a href="#" class="vh-btn-primary">Start for Free</a>
+      <a href="#" class="vh-btn-ghost">▶ &nbsp;Watch Demo</a>
+    </div>
+  </div>
+  <div class="vh-scroll-hint">
+    <span class="vh-scroll-label">Scroll</span>
+    <div class="vh-scroll-line"></div>
+  </div>
+</section>`,
+        css: `.vh-section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.vh-section .vh-video{
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.vh-section .vh-overlay{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(3,45,96,0.85) 0%, rgba(0,0,0,0.5) 100%);
+  z-index: 1;
+}
+
+.vh-section .vh-content{
+  position: relative;
+  z-index: 2;
+  max-width: 720px;
+  padding: 0 32px;
+  text-align: center;
+}
+
+.vh-section .vh-eyebrow{
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #00A1E0;
+  margin-bottom: 22px;
+}
+
+.vh-section .vh-headline{
+  font-size: 68px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #fff;
+  letter-spacing: -0.03em;
+  margin: 0 0 22px;
+  text-shadow: 0 2px 40px rgba(0,0,0,0.3);
+}
+
+.vh-section .vh-body{
+  font-size: 18px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.75;
+  margin: 0 0 40px;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.vh-section .vh-actions{
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.vh-section .vh-btn-primary{
+  padding: 15px 36px;
+  background: #00A1E0;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.15s;
+}
+.vh-section .vh-btn-primary:hover{ background: #0090c8; transform: translateY(-2px); }
+
+.vh-section .vh-btn-ghost{
+  padding: 15px 28px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  border: 2px solid rgba(255,255,255,0.35);
+  backdrop-filter: blur(4px);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.vh-section .vh-btn-ghost:hover{ border-color: #fff; transform: translateY(-2px); }
+
+.vh-section .vh-scroll-hint{
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.vh-section .vh-scroll-label{
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+}
+
+.vh-section .vh-scroll-line{
+  width: 1px;
+  height: 40px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.4), transparent);
+  animation: vhScrollLine 1.6s ease-in-out infinite;
+}
+
+@keyframes vhScrollLine{
+  0%,100% { transform: scaleY(1); opacity: 1; }
+  50%      { transform: scaleY(0.4); opacity: 0.3; }
+}
+
+@media (max-width: 640px) {
+  .vh-section .vh-headline{ font-size: 40px; }
+}`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function (btn) {
+  btn.addEventListener('click', function (e) { e.preventDefault(); });
+});`
+      },
+
+      // ── STICKY SCROLL ──────────────────────────────────────────────────────────
+      stickyscroll: {
+        html: `<section class="ss-section">
+  <div class="ss-inner">
+
+    <div class="ss-sticky">
+      <span class="ss-eyebrow">The Platform</span>
+      <h2 class="ss-title">Built for every workflow</h2>
+      <p class="ss-body">Agentforce brings autonomous AI to every corner of your business — without adding complexity.</p>
+      <div class="ss-progress-track">
+        <div class="ss-progress-bar" id="ss-progress"></div>
+      </div>
+    </div>
+
+    <div class="ss-steps">
+
+      <div class="ss-step" data-step="1">
+        <div class="ss-step-icon">🤖</div>
+        <h3 class="ss-step-title">Autonomous Agents</h3>
+        <p class="ss-step-body">Your agents research, decide, and act — completing full workflows without waiting for human input on every step. They're always on, always consistent.</p>
+        <div class="ss-step-tag">Sales · Service · Marketing</div>
+      </div>
+
+      <div class="ss-step" data-step="2">
+        <div class="ss-step-icon">🔒</div>
+        <h3 class="ss-step-title">Einstein Trust Layer</h3>
+        <p class="ss-step-body">Every action is governed by your existing Salesforce permissions. Data never leaves your control. Every decision is logged and auditable.</p>
+        <div class="ss-step-tag">Security · Compliance · Governance</div>
+      </div>
+
+      <div class="ss-step" data-step="3">
+        <div class="ss-step-icon">🔗</div>
+        <h3 class="ss-step-title">1,000+ Integrations</h3>
+        <p class="ss-step-body">Connect natively to Slack, SAP, Workday, Zendesk, and hundreds more. Your agent works with every tool your team already uses.</p>
+        <div class="ss-step-tag">Slack · SAP · Workday · More</div>
+      </div>
+
+      <div class="ss-step" data-step="4">
+        <div class="ss-step-icon">⚡</div>
+        <h3 class="ss-step-title">Live in Hours, Not Months</h3>
+        <p class="ss-step-body">Connect your Salesforce org, configure your agent in plain language, and go live — same day. No implementation partner required.</p>
+        <div class="ss-step-tag">No-code · Fast setup · Instant ROI</div>
+      </div>
+
+    </div>
+  </div>
+</section>`,
+        css: `.ss-section {
+  background: #fff;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+  padding: 80px 32px;
+}
+
+.ss-section .ss-inner{
+  max-width: 1060px;
+  margin: 0 auto;
+  display: flex;
+  gap: 80px;
+  align-items: flex-start;
+}
+
+.ss-section .ss-sticky{
+  flex: 0 0 320px;
+  position: sticky;
+  top: 40px;
+}
+
+.ss-section .ss-eyebrow{
+  display: block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #0070D2; margin-bottom: 14px;
+}
+
+.ss-section .ss-title{
+  font-size: 38px; font-weight: 800;
+  color: #032D60; margin: 0 0 16px; line-height: 1.1;
+}
+
+.ss-section .ss-body{
+  font-size: 15px; color: #777;
+  line-height: 1.75; margin: 0 0 32px;
+}
+
+.ss-section .ss-progress-track{
+  width: 3px; height: 180px;
+  background: #eee; border-radius: 2px; overflow: hidden;
+}
+
+.ss-section .ss-progress-bar{
+  width: 100%; height: 0%;
+  background: linear-gradient(to bottom, #0070D2, #00A1E0);
+  border-radius: 2px;
+  transition: height 0.1s linear;
+}
+
+.ss-section .ss-steps{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ss-section .ss-step{
+  padding: 56px 0;
+  border-bottom: 1px solid #f0f0f0;
+  opacity: 0.35;
+  transform: translateX(12px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.ss-section .ss-step:last-child{ border-bottom: none; }
+.ss-section .ss-step.ss-active{ opacity: 1; transform: translateX(0); }
+
+.ss-section .ss-step-icon{
+  font-size: 36px; margin-bottom: 16px; display: block;
+}
+
+.ss-section .ss-step-title{
+  font-size: 26px; font-weight: 800;
+  color: #032D60; margin: 0 0 12px;
+}
+
+.ss-section .ss-step-body{
+  font-size: 15px; color: #555;
+  line-height: 1.8; margin: 0 0 20px;
+}
+
+.ss-section .ss-step-tag{
+  display: inline-block;
+  font-size: 12px; font-weight: 600;
+  color: #0070D2;
+  background: rgba(0,112,210,0.07);
+  padding: 5px 14px; border-radius: 20px;
+}
+
+@media (max-width: 860px) {
+  .ss-section .ss-inner{ flex-direction: column; gap: 40px; }
+  .ss-section .ss-sticky{ position: static; flex: none; }
+  .ss-section .ss-step{ opacity: 1; transform: none; }
+  .ss-section .ss-progress-track{ display: none; }
+}`,
+        js: `(function () {
+  var steps    = Array.from(document.querySelectorAll('.ss-step'));
+  var progress = document.getElementById('ss-progress');
+  if (!steps.length) return;
+
+  function update() {
+    var total    = steps.length;
+    var active   = -1;
+    var midY     = window.innerHeight / 2;
+
+    steps.forEach(function (step, i) {
+      var rect = step.getBoundingClientRect();
+      step.classList.remove('ss-active');
+      if (rect.top < midY && rect.bottom > 0) active = i;
+    });
+
+    if (active === -1) active = 0;
+    steps[active].classList.add('ss-active');
+
+    if (progress) {
+      var pct = ((active + 1) / total) * 100;
+      progress.style.height = pct + '%';
+    }
+  }
+
+  window.addEventListener('scroll', update, { passive: true });
+  // Activate first step immediately (iframe fallback)
+  setTimeout(function () { steps[0] && steps[0].classList.add('ss-active'); }, 100);
+})();`
+      },
+
+      // ── ZIGZAG ─────────────────────────────────────────────────────────────────
+      zigzag: {
+        html: `<section class="zz-section">
+  <div class="zz-inner">
+    <div class="zz-header">
+      <span class="zz-eyebrow">Features</span>
+      <h2 class="zz-title">Do more with less</h2>
+    </div>
+
+    <div class="zz-row">
+      <div class="zz-copy">
+        <span class="zz-num">01</span>
+        <h3 class="zz-row-title">Deploy agents without engineers</h3>
+        <p class="zz-row-body">Agentforce Studio gives every admin a drag-and-drop interface to build, test, and ship autonomous agents in plain English. Your first agent can be live within a day.</p>
+        <a href="#" class="zz-link">Explore Agentforce Studio →</a>
+      </div>
+      <div class="zz-visual zz-v1">
+        <div class="zz-mock">
+          <div class="zz-mock-bar zz-bar-label">Agent: Sales Research</div>
+          <div class="zz-mock-row"><span class="zz-check">✓</span> Pulled 12 account insights</div>
+          <div class="zz-mock-row"><span class="zz-check">✓</span> Drafted 3 personalised emails</div>
+          <div class="zz-mock-row zz-row-active"><span class="zz-check" style="color:#00A1E0">→</span> Scheduling follow-up calls...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zz-row zz-row-flip">
+      <div class="zz-copy">
+        <span class="zz-num">02</span>
+        <h3 class="zz-row-title">Every action, fully audited</h3>
+        <p class="zz-row-body">The Einstein Trust Layer logs every decision your agent makes — what data it accessed, what it sent, and why. Full compliance, zero surprises.</p>
+        <a href="#" class="zz-link">Learn about the Trust Layer →</a>
+      </div>
+      <div class="zz-visual zz-v2">
+        <div class="zz-mock">
+          <div class="zz-mock-bar zz-bar-label" style="background:#eef5ff;color:#0070D2">Audit Log · Today</div>
+          <div class="zz-mock-row"><span class="zz-tag">READ</span> Account: Acme Corp</div>
+          <div class="zz-mock-row"><span class="zz-tag">SEND</span> Email drafted &amp; queued</div>
+          <div class="zz-mock-row"><span class="zz-tag zz-tag-safe">SAFE</span> PII masked before model</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="zz-row">
+      <div class="zz-copy">
+        <span class="zz-num">03</span>
+        <h3 class="zz-row-title">Scale without adding headcount</h3>
+        <p class="zz-row-body">One agent can handle the workload of dozens of repetitive tasks simultaneously, 24/7. As volume grows, your agents grow with it — no recruiting required.</p>
+        <a href="#" class="zz-link">See the ROI calculator →</a>
+      </div>
+      <div class="zz-visual zz-v3">
+        <div class="zz-mock">
+          <div class="zz-mock-bar zz-bar-label" style="background:#f0fff4;color:#16a34a">Live Agent Metrics</div>
+          <div class="zz-mock-row">Tasks completed today <strong style="margin-left:auto;color:#032D60">1,847</strong></div>
+          <div class="zz-mock-row">Avg. handle time <strong style="margin-left:auto;color:#032D60">14s</strong></div>
+          <div class="zz-mock-row">Human escalations <strong style="margin-left:auto;color:#16a34a">↓ 62%</strong></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>`,
+        css: `.zz-section {
+  background: #fff;
+  padding: 88px 32px;
+  font-family: 'Salesforce Sans', Arial, sans-serif;
+}
+
+.zz-section .zz-inner{ max-width: 1060px; margin: 0 auto; }
+
+.zz-section .zz-header{ text-align: center; margin-bottom: 80px; }
+
+.zz-section .zz-eyebrow{
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: #0070D2; margin-bottom: 14px;
+}
+
+.zz-section .zz-title{ font-size: 44px; font-weight: 800; color: #032D60; margin: 0; }
+
+.zz-section .zz-row{
+  display: flex;
+  align-items: center;
+  gap: 72px;
+  padding: 64px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.zz-section .zz-row-flip{ flex-direction: row-reverse; }
+
+.zz-section .zz-copy{ flex: 1; }
+
+.zz-section .zz-num{
+  display: inline-block;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #ccc; margin-bottom: 12px;
+}
+
+.zz-section .zz-row-title{
+  font-size: 30px; font-weight: 800;
+  color: #032D60; margin: 0 0 14px; line-height: 1.15;
+}
+
+.zz-section .zz-row-body{
+  font-size: 15px; color: #666;
+  line-height: 1.8; margin: 0 0 22px;
+}
+
+.zz-section .zz-link{
+  font-size: 14px; font-weight: 700;
+  color: #0070D2; text-decoration: none;
+}
+.zz-section .zz-link:hover{ text-decoration: underline; }
+
+.zz-section .zz-visual{
+  flex: 1;
+  border-radius: 18px;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.zz-section .zz-v1{ background: linear-gradient(135deg, #e8f4ff, #f5fbff); }
+.zz-section .zz-v2{ background: linear-gradient(135deg, #f5f0ff, #faf5ff); }
+.zz-section .zz-v3{ background: linear-gradient(135deg, #f0fff4, #f5fff8); }
+
+.zz-section .zz-mock{
+  background: #fff;
+  border-radius: 13px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+}
+
+.zz-section .zz-mock-bar{
+  padding: 10px 16px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em;
+  background: #f5f5f5; color: #888;
+}
+
+.zz-section .zz-bar-label{ text-transform: uppercase; }
+
+.zz-section .zz-mock-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 13px; color: #444;
+  border-top: 1px solid #f5f5f5;
+}
+
+.zz-section .zz-row-active{ color: #0070D2; font-weight: 600; }
+
+.zz-section .zz-check{ font-size: 14px; color: #16a34a; font-weight: 700; flex-shrink: 0; }
+
+.zz-section .zz-tag{
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 8px; border-radius: 4px;
+  background: rgba(0,112,210,0.1); color: #0070D2;
+  flex-shrink: 0;
+}
+
+.zz-section .zz-tag-safe{ background: rgba(22,163,74,0.1); color: #16a34a; }
+
+@media (max-width: 768px) {
+  .zz-section .zz-row, .zz-section .zz-row-flip{ flex-direction: column; gap: 36px; }
+  .zz-section .zz-title{ font-size: 32px; }
+  .zz-section .zz-row-title{ font-size: 24px; }
+}`,
+        js: `document.querySelectorAll('[data-cta]').forEach(function (el) {
+  el.addEventListener('click', function (e) { e.preventDefault(); });
+});`
+      }
+
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // BLADE META
+    // ─────────────────────────────────────────────────────────────────────────────
+    var BLADE_META = {
+      promo:        { label: 'Promo Blade'   },
+      aurora:       { label: 'Aurora Hero'   },
+      glass:        { label: 'Glass Hero'    },
+      split:        { label: 'Split Screen'  },
+      parallax:     { label: 'Parallax'      },
+      minimal:      { label: 'Minimal Hero'  },
+      videohero:    { label: 'Video Hero'    },
+      stickyscroll: { label: 'Sticky Scroll' },
+      zigzag:       { label: 'Zigzag'        },
+      cards:        { label: 'Card Grid',    cat: 'content' },
+      bento:        { label: 'Bento Grid',   cat: 'content' },
+      tabs:         { label: 'Feature Tabs', cat: 'content' },
+      reveal:       { label: 'Scroll Reveal',cat: 'content' },
+      timeline:     { label: 'Timeline',     cat: 'content' },
+      stats:        { label: 'Stats',        cat: 'social'  },
+      testi:        { label: 'Testimonials', cat: 'social'  },
+      logowall:     { label: 'Logo Wall',    cat: 'social'  },
+      ctabanner:    { label: 'CTA Banner',   cat: 'social'  }
+    };
+    Object.keys(BLADE_META).forEach(function(k) {
+      if (!BLADE_META[k].cat) BLADE_META[k].cat = 'hero';
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // STATE
+    // ─────────────────────────────────────────────────────────────────────────────
+    var page   = [];
+    var nextId = 1;
+    var addMenuOpen = false;
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // ADD MENU
+    // ─────────────────────────────────────────────────────────────────────────────
+    function toggleAddMenu() {
+      addMenuOpen = !addMenuOpen;
+      document.getElementById('add-menu').style.display    = addMenuOpen ? 'block' : 'none';
+      document.getElementById('add-chevron').style.transform = addMenuOpen ? 'rotate(180deg)' : '';
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PAGE MANAGEMENT
+    // ─────────────────────────────────────────────────────────────────────────────
+    function addBlade(key) {
+      page.push({ id: nextId++, key: key });
+      addMenuOpen = false;
+      document.getElementById('add-menu').style.display    = 'none';
+      document.getElementById('add-chevron').style.transform = '';
+      renderStack();
+      schedulePreview();
+    }
+
+    function removeBlade(id) {
+      page = page.filter(function (b) { return b.id !== id; });
+      renderStack();
+      schedulePreview();
+    }
+
+    function clearAll() {
+      if (!page.length) return;
+      page = [];
+      renderStack();
+      refreshPreview();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // RENDER STACK
+    // ─────────────────────────────────────────────────────────────────────────────
+    function renderStack() {
+      var list  = document.getElementById('stack-list');
+      var empty = document.getElementById('stack-empty');
+      var count = document.getElementById('blade-count');
+      var label = document.getElementById('preview-label');
+      var exportBtn = document.getElementById('export-btn');
+
+      if (!page.length) {
+        list.style.display  = 'none';
+        empty.style.display = '';
+        count.textContent   = '0 blades';
+        label.textContent   = '';
+        exportBtn.disabled  = true;
+        exportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        return;
+      }
+
+      empty.style.display = 'none';
+      list.style.display  = 'block';
+      var n = page.length;
+      count.textContent   = n + ' blade' + (n !== 1 ? 's' : '');
+      label.textContent   = n + ' blade' + (n !== 1 ? 's' : '') + ' · scroll preview to see full page';
+      exportBtn.disabled  = false;
+      exportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      list.innerHTML = page.map(function (b) {
+        var meta = BLADE_META[b.key] || { label: b.key, cat: 'hero' };
+        var id   = b.id;
+        return '<div class="stack-item" data-id="' + id + '" draggable="true"'
+          + ' ondragstart="onDragStart(event,' + id + ')"'
+          + ' ondragend="onDragEnd(event,' + id + ')"'
+          + ' ondragover="onDragOver(event,' + id + ')"'
+          + ' ondrop="onDrop(event,' + id + ')">'
+          + '<div class="drag-handle" title="Drag to reorder">&#8942;</div>'
+          + '<span class="cat-dot cat-dot-' + meta.cat + '"></span>'
+          + '<span class="item-label">' + meta.label + '</span>'
+          + '<button class="remove-btn" onclick="removeBlade(' + id + ')" title="Remove">&#x2715;</button>'
+          + '</div>';
+      }).join('');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // DRAG AND DROP
+    // ─────────────────────────────────────────────────────────────────────────────
+    var dragId = null;
+
+    function onDragStart(e, id) {
+      dragId = id;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(function () {
+        var el = document.querySelector('.stack-item[data-id="' + id + '"]');
+        if (el) el.classList.add('dragging');
+      }, 0);
+    }
+
+    function onDragEnd(e, id) {
+      var el = document.querySelector('.stack-item[data-id="' + id + '"]');
+      if (el) el.classList.remove('dragging');
+      document.querySelectorAll('.stack-item').forEach(function (el) {
+        el.classList.remove('drag-over');
+      });
+      dragId = null;
+    }
+
+    function onDragOver(e, id) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (id === dragId) return;
+      document.querySelectorAll('.stack-item').forEach(function (el) {
+        el.classList.remove('drag-over');
+      });
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function onDrop(e, targetId) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (dragId === null || dragId === targetId) return;
+      var fromIdx = -1, toIdx = -1;
+      for (var i = 0; i < page.length; i++) {
+        if (page[i].id === dragId)    fromIdx = i;
+        if (page[i].id === targetId)  toIdx   = i;
+      }
+      if (fromIdx === -1 || toIdx === -1) return;
+      var item = page.splice(fromIdx, 1)[0];
+      page.splice(toIdx, 0, item);
+      renderStack();
+      schedulePreview();
+    }
+
+    function onDropTrail(e) {
+      e.preventDefault();
+      if (dragId === null) return;
+      var fromIdx = -1;
+      for (var i = 0; i < page.length; i++) {
+        if (page[i].id === dragId) { fromIdx = i; break; }
+      }
+      if (fromIdx === -1) return;
+      var item = page.splice(fromIdx, 1)[0];
+      page.push(item);
+      renderStack();
+      schedulePreview();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PREVIEW
+    // ─────────────────────────────────────────────────────────────────────────────
+    var debounceTimer;
+
+    var SF_FONTS = '@font-face{font-display:swap;font-family:"Salesforce Sans";font-weight:400;src:url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Regular.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Regular.woff) format("woff")}'
+      + '@font-face{font-display:swap;font-family:"Salesforce Sans";font-style:italic;font-weight:400;src:url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Italic.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Italic.woff) format("woff")}'
+      + '@font-face{font-display:swap;font-family:"Salesforce Sans";font-weight:700;src:url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Bold.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Bold.woff) format("woff")}'
+      + '@font-face{font-display:swap;font-family:"ITC Avant Garde";font-weight:500;src:url(https://a.sfdcstatic.com/shared/fonts/avant-garde/AvantGardeForSalesforceW05-Dm.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/avant-garde/AvantGardeForSalesforceW05-Dm.woff) format("woff")}'
+      + '*,*::before,*::after{box-sizing:border-box}'
+      + 'body{margin:0;padding:0;font-family:"Salesforce Sans",Arial,sans-serif;font-size:16px;line-height:1.5;color:#444;-webkit-font-smoothing:antialiased}'
+      + 'img{max-width:100%;display:block}';
+
+    function buildDoc() {
+      if (!page.length) {
+        return '<!DOCTYPE html><html><body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font-family:Salesforce Sans,Arial,sans-serif;color:#9ca3af;font-size:13px;flex-direction:column;gap:14px;background:#f9fafb">'
+          + '<span style="font-size:40px;opacity:0.4">🧩</span>'
+          + '<span>Add blades from the sidebar to preview your page</span>'
+          + '</body></html>';
+      }
+
+      var css  = '';
+      var html = '';
+      var js   = '';
+
+      page.forEach(function (b) {
+        var t = templates[b.key];
+        css  += t.css  + '\n\n';
+        html += t.html + '\n\n';
+        js   += 'try{\n' + t.js + '\n}catch(e){console.error(e)}\n\n';
+      });
+
+      return '<!DOCTYPE html><html lang="en"><head>'
+        + '<meta charset="UTF-8"/>'
+        + '<meta name="viewport" content="width=device-width,initial-scale=1.0"/>'
+        + '<style>' + SF_FONTS + '\n' + css + '</style>'
+        + '</head><body style="margin:0;padding:0">'
+        + html
+        + '<script>\n' + js + '\n<\/script>'
+        + '</body></html>';
+    }
+
+    function refreshPreview() {
+      document.getElementById('preview').srcdoc = buildDoc();
+    }
+
+    function schedulePreview() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(refreshPreview, 300);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // EXPORT
+    // ─────────────────────────────────────────────────────────────────────────────
+    function exportHTML() {
+      if (!page.length) return;
+
+      var css  = '';
+      var html = '';
+      var js   = '';
+
+      page.forEach(function (b) {
+        var t    = templates[b.key];
+        var meta = BLADE_META[b.key] || { label: b.key };
+        css  += '/* ' + meta.label + ' */\n' + t.css  + '\n\n';
+        html += '<!-- ' + meta.label + ' -->\n' + t.html + '\n\n';
+        js   += '/* ' + meta.label + ' */\ntry{\n' + t.js + '\n}catch(e){console.error(e)}\n\n';
+      });
+
+      var sfFontsCleaned = SF_FONTS.replace(/}(?=[^}])/g, '}\n');
+
+      var doc = '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
+        + '  <meta charset="UTF-8" />\n'
+        + '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
+        + '  <title>My Page</title>\n'
+        + '  <style>\n' + sfFontsCleaned + '\n\n' + css + '  </style>\n'
+        + '</head>\n<body>\n\n'
+        + html
+        + '<script>\n' + js + '\n<\/script>\n'
+        + '</body>\n</html>';
+
+      var blob = new Blob([doc], { type: 'text/html' });
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href   = url;
+      a.download = 'assembled-page.html';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CODE DRAWER
+    // ─────────────────────────────────────────────────────────────────────────────
+    var drawerOpen  = false;
+    var activeTab   = 'html';
+    var DRAWER_H    = '340px';
+
+    function toggleCodeDrawer() {
+      drawerOpen = !drawerOpen;
+      var drawer = document.getElementById('code-drawer');
+      var btn    = document.getElementById('code-drawer-btn');
+      drawer.style.height   = drawerOpen ? DRAWER_H : '0';
+      drawer.style.overflow = drawerOpen ? 'hidden' : 'hidden';
+      btn.classList.toggle('text-indigo-400', drawerOpen);
+      if (drawerOpen) renderCodeDrawer();
+    }
+
+    function setCodeTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.code-tab').forEach(function (b) {
+        var isActive = b.getAttribute('data-tab') === tab;
+        b.classList.toggle('border-indigo-400', isActive);
+        b.classList.toggle('text-white',        isActive);
+        b.classList.toggle('border-transparent',!isActive);
+        b.classList.toggle('text-gray-500',     !isActive);
+      });
+      renderCodeDrawer();
+    }
+
+    function renderCodeDrawer() {
+      var content = document.getElementById('code-content');
+      if (!page.length) {
+        content.innerHTML = '<p class="text-xs text-gray-600 p-2">Add blades to see code.</p>';
+        return;
+      }
+
+      content.innerHTML = page.map(function (b) {
+        var t    = templates[b.key];
+        var meta = BLADE_META[b.key] || { label: b.key };
+        var code = activeTab === 'html' ? t.html : activeTab === 'css' ? t.css : t.js;
+        var escaped = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        var colorClass = activeTab === 'html' ? 'text-orange-400' : activeTab === 'css' ? 'text-sky-400' : 'text-yellow-400';
+        return '<div>'
+          + '<div class="flex items-center justify-between mb-1.5">'
+          + '<span class="text-xs font-bold ' + colorClass + ' uppercase tracking-widest">' + meta.label + '</span>'
+          + '<button onclick="copyBlock(this)" data-code="' + encodeURIComponent(code) + '" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">Copy</button>'
+          + '</div>'
+          + '<pre class="code-block">' + escaped + '</pre>'
+          + '</div>';
+      }).join('');
+    }
+
+    function copyBlock(btn) {
+      var code = decodeURIComponent(btn.getAttribute('data-code'));
+      navigator.clipboard.writeText(code).then(function () {
+        var orig = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('text-emerald-400');
+        setTimeout(function () {
+          btn.textContent = orig;
+          btn.classList.remove('text-emerald-400');
+        }, 1500);
+      });
+    }
+
+    function copyActiveTab() {
+      if (!page.length) return;
+      var allCode = page.map(function (b) {
+        var t    = templates[b.key];
+        var meta = BLADE_META[b.key] || { label: b.key };
+        var code = activeTab === 'html' ? t.html : activeTab === 'css' ? t.css : t.js;
+        return '/* ' + meta.label + ' */\n' + code;
+      }).join('\n\n');
+      var btn = document.getElementById('copy-code-btn');
+      navigator.clipboard.writeText(allCode).then(function () {
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('text-emerald-400');
+        setTimeout(function () {
+          btn.textContent = 'Copy all';
+          btn.classList.remove('text-emerald-400');
+        }, 1500);
+      });
+    }
+
+    // Re-render drawer content when page changes (if open)
+    var _origRenderStack = renderStack;
+    renderStack = function () {
+      _origRenderStack();
+      if (drawerOpen) renderCodeDrawer();
+    };
+
+    // Set initial active tab styling
+    setCodeTab('html');
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // BOOT
+    // ─────────────────────────────────────────────────────────────────────────────
+    renderStack();
+    refreshPreview();
+
+  </script>
+</body>
+</html>

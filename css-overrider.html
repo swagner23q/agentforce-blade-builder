@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSS Overrider</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { overflow: hidden; }
+    textarea {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.65;
+      resize: none;
+    }
+    #blade-badge { transition: opacity 0.2s; }
+    #h-resize { cursor: row-resize; }
+    #css-overrides { color: #7dd3fc; }
+  </style>
+</head>
+<body class="bg-gray-950 text-white h-screen flex flex-col">
+
+  <!-- ── Header ── -->
+  <header class="shrink-0 bg-gray-900 border-b border-gray-800 flex items-center gap-3 px-4 py-2">
+    <span class="font-bold text-white tracking-tight text-sm">🎨 CSS Overrider</span>
+    <div class="w-px h-4 bg-gray-700"></div>
+    <span class="text-xs text-gray-500">1. Paste blade HTML · 2. Paste site CSS · 3. Write overrides · preview updates live</span>
+
+    <div id="blade-badge" class="hidden items-center gap-1.5 px-2.5 py-1 bg-gray-800 border border-gray-700 rounded text-xs">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+      <span id="blade-badge-name" class="text-gray-300 font-mono"></span>
+    </div>
+
+    <div class="ml-auto flex items-center gap-2">
+      <a href="page-assembler.html" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">Page Assembler →</a>
+      <div class="w-px h-4 bg-gray-700"></div>
+      <a href="blade-builder.html" class="text-xs text-gray-600 hover:text-gray-400 transition-colors">← Blade Builder</a>
+    </div>
+  </header>
+
+  <!-- ── Top row: three panels ── -->
+  <div id="top-row" class="shrink-0 flex border-b border-gray-800" style="height:42vh">
+
+    <!-- 1. Blade HTML -->
+    <div class="flex-1 flex flex-col overflow-hidden border-r border-gray-800">
+      <div class="shrink-0 flex items-center justify-between px-3 py-1.5 bg-gray-900 border-b border-gray-800">
+        <span class="text-xs font-bold text-orange-400 uppercase tracking-widest">Blade HTML</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-600">Outer HTML from DevTools</span>
+          <button onclick="clearHTML()" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">Clear</button>
+        </div>
+      </div>
+      <textarea
+        id="html-input"
+        class="flex-1 min-h-0 bg-gray-950 text-gray-100 p-3 outline-none w-full"
+        spellcheck="false"
+        placeholder="Paste your blade HTML here (right-click element in DevTools → Copy → Copy outerHTML)..."
+        oninput="onHTMLInput()"
+      ></textarea>
+    </div>
+
+    <!-- 2. Site CSS -->
+    <div class="flex-1 flex flex-col overflow-hidden border-r border-gray-800">
+      <div class="shrink-0 flex items-center justify-between px-3 py-1.5 bg-gray-900 border-b border-gray-800">
+        <span class="text-xs font-bold text-violet-400 uppercase tracking-widest">Site CSS</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-600">Paste from DevTools Sources</span>
+          <button onclick="clearSiteCSS()" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">Clear</button>
+        </div>
+      </div>
+      <textarea
+        id="site-css-input"
+        class="flex-1 min-h-0 bg-gray-950 text-gray-100 p-3 outline-none w-full"
+        spellcheck="false"
+        placeholder="Paste the site's stylesheet here so the preview matches the live page.
+
+How to get it:
+· DevTools → Sources → find the main .css file → Ctrl+A, copy
+· Or DevTools → Network → filter .css → click the file → Response tab → copy"
+        oninput="schedulePreview()"
+      ></textarea>
+    </div>
+
+    <!-- 3. CSS Overrides -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <div class="shrink-0 flex items-center justify-between px-3 py-1.5 bg-gray-900 border-b border-gray-800">
+        <span class="text-xs font-bold text-sky-400 uppercase tracking-widest">CSS Overrides</span>
+        <div class="flex items-center gap-2">
+          <button onclick="copyCSS()" id="copy-css-btn" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">Copy</button>
+          <button onclick="clearCSS()" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">Clear</button>
+        </div>
+      </div>
+      <textarea
+        id="css-overrides"
+        class="flex-1 min-h-0 bg-gray-950 p-3 outline-none w-full"
+        spellcheck="false"
+        placeholder="/* Write your CSS overrides here — preview updates live */
+
+/* Example: change the headline colour */
+.blade-headline {
+  color: #FF6B35;
+}"
+        oninput="schedulePreview()"
+      ></textarea>
+    </div>
+
+  </div>
+
+  <!-- ── Horizontal resize handle ── -->
+  <div id="h-resize" style="height:5px;background:transparent;flex-shrink:0;position:relative;z-index:10" class="hover:bg-indigo-500 transition-colors"></div>
+
+  <!-- ── Bottom: preview ── -->
+  <div class="flex flex-1 overflow-hidden">
+    <div id="preview-col" class="flex-1 flex flex-col overflow-hidden">
+      <div class="shrink-0 flex items-center justify-between px-3 py-1.5 bg-gray-900 border-b border-gray-800">
+        <span class="text-xs font-bold text-emerald-400 uppercase tracking-widest">Preview</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-600">Site CSS + overrides applied</span>
+          <button onclick="refreshPreview()" class="text-xs px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">Refresh</button>
+        </div>
+      </div>
+      <iframe id="preview" class="flex-1 w-full border-0 bg-white"></iframe>
+    </div>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────────────────────
+    // BLADE DETECTION
+    // ─────────────────────────────────────────────────────────────────────────────
+    function detectBlade(html) {
+      var nameMatch    = html.match(/data-blade-name="([^"]+)"/);
+      var variantMatch = html.match(/data-blade-variant="([^"]+)"/);
+      return {
+        name:    nameMatch    ? nameMatch[1]    : null,
+        variant: variantMatch ? variantMatch[1] : null
+      };
+    }
+
+    function onHTMLInput() {
+      var html  = document.getElementById('html-input').value;
+      var badge = document.getElementById('blade-badge');
+      var label = document.getElementById('blade-badge-name');
+      if (!html.trim()) {
+        badge.classList.add('hidden');
+        badge.classList.remove('flex');
+        refreshPreview();
+        return;
+      }
+      var info = detectBlade(html);
+      if (info.name || info.variant) {
+        label.textContent = info.name || info.variant;
+        badge.classList.remove('hidden');
+        badge.classList.add('flex');
+      } else {
+        badge.classList.add('hidden');
+        badge.classList.remove('flex');
+      }
+      schedulePreview();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // PREVIEW
+    // ─────────────────────────────────────────────────────────────────────────────
+    var debounceTimer;
+
+    var SF_FONT_CSS = `
+@font-face{font-display:swap;font-family:"Salesforce Sans";font-weight:400;src:url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Regular.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Regular.woff) format("woff")}
+@font-face{font-display:swap;font-family:"Salesforce Sans";font-style:italic;font-weight:400;src:url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Italic.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Italic.woff) format("woff")}
+@font-face{font-display:swap;font-family:"Salesforce Sans";font-weight:700;src:url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Bold.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/salesforce-sans/SalesforceSans-Bold.woff) format("woff")}
+@font-face{font-display:swap;font-family:"ITC Avant Garde";font-weight:500;src:url(https://a.sfdcstatic.com/shared/fonts/avant-garde/AvantGardeForSalesforceW05-Dm.woff2) format("woff2"),url(https://a.sfdcstatic.com/shared/fonts/avant-garde/AvantGardeForSalesforceW05-Dm.woff) format("woff")}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; padding: 0; font-family: "Salesforce Sans", Arial, sans-serif; font-size: 16px; line-height: 1.5; color: #444; -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; display: block; }
+`;
+
+    function buildDoc() {
+      var html     = document.getElementById('html-input').value;
+      var siteCSS  = document.getElementById('site-css-input').value;
+      var override = document.getElementById('css-overrides').value;
+
+      var placeholder = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:\'Salesforce Sans\',Arial,sans-serif;color:#9ca3af;font-size:13px;flex-direction:column;gap:12px">'
+        + '<span style="font-size:28px">🎨</span>'
+        + '<span>Paste blade HTML above to see a preview</span>'
+        + '</div>';
+
+      return '<!DOCTYPE html><html lang="en"><head>'
+        + '<meta charset="UTF-8"/>'
+        + '<meta name="viewport" content="width=device-width, initial-scale=1.0"/>'
+        + '<style>' + SF_FONT_CSS + '</style>'
+        + (siteCSS  ? '<style>' + siteCSS  + '</style>' : '')
+        + (override ? '<style>' + override + '</style>' : '')
+        + '</head><body>'
+        + (html || placeholder)
+        + '</body></html>';
+    }
+
+    function refreshPreview() {
+      document.getElementById('preview').srcdoc = buildDoc();
+    }
+
+    function schedulePreview() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(refreshPreview, 320);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // COPY / CLEAR
+    // ─────────────────────────────────────────────────────────────────────────────
+    function copyCSS() {
+      var val = document.getElementById('css-overrides').value;
+      if (!val) return;
+      navigator.clipboard.writeText(val).then(function () {
+        var btn = document.getElementById('copy-css-btn');
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('text-emerald-400');
+        setTimeout(function () {
+          btn.textContent = 'Copy';
+          btn.classList.remove('text-emerald-400');
+        }, 1500);
+      });
+    }
+
+    function clearHTML() {
+      document.getElementById('html-input').value = '';
+      document.getElementById('blade-badge').classList.add('hidden');
+      document.getElementById('blade-badge').classList.remove('flex');
+      refreshPreview();
+    }
+
+    function clearSiteCSS() {
+      document.getElementById('site-css-input').value = '';
+      refreshPreview();
+    }
+
+    function clearCSS() {
+      document.getElementById('css-overrides').value = '';
+      refreshPreview();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // RESIZE (horizontal — top/bottom split)
+    // ─────────────────────────────────────────────────────────────────────────────
+    (function () {
+      var handle   = document.getElementById('h-resize');
+      var topRow   = document.getElementById('top-row');
+      var dragging = false;
+      var startY, startH;
+
+      handle.addEventListener('mousedown', function (e) {
+        dragging = true;
+        startY   = e.clientY;
+        startH   = topRow.getBoundingClientRect().height;
+        document.body.style.cursor     = 'row-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        var newH = Math.max(80, Math.min(startH + (e.clientY - startY), window.innerHeight - 140));
+        topRow.style.height = newH + 'px';
+      });
+
+      document.addEventListener('mouseup', function () {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.cursor     = '';
+        document.body.style.userSelect = '';
+      });
+    })();
+
+    refreshPreview();
+  </script>
+
+</body>
+</html>
