@@ -2,4 +2,6 @@
 !blade-builder.html
 !css-overrider.html
 !page-assembler.html
+!thumbs/
+!thumbs/**
 !.gitignore
